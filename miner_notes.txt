@@ -1,0 +1,25 @@
+https://web.archive.org/web/20030204175115/http://www.cs.man.ac.uk:80/~broada/spectrum/willy/collision.html
+
+The order in which objects are drawn in each time-frame (combining MM and JSW) is:
+
+The single-character blocks: background, floor, wall and static nasty; and, in MM: crumbling floor, conveyor, second static nasty, and spare (and `garbage' blocks).
+
+In JSW, the ramp and the conveyor; in MM, the conveyor animation.
+
+The player. You collide with the blocks that you're touching; collision detection for the player is colour-based.
+
+The guardians. The guardians are drawn in the order in which they appear in the room's guardian instance list, so a guardian can collide with anything drawn before it, including guardians which precede it in the guardian instance list. If a guardian collides with anything, you lose a life. Collision detection for horizontal and vertical guardians is pixel-based; for arrows it is both pixel-based and colour-based (white ink).
+
+The items. Collision detection for items is colour-based: an item is collected if it collides with anything which has white ink, such as the player, white-ink background (as in "Swimming Pool") or white-ink guardians. Note that it's quite safe to put items in the path of a guardian, since it won't collide with them. The exception to this is vertical guardians in MM, which are actually drawn after the items, therefore they can collide with items and kill you.
+
+The portal in MM. Collision detection for the portal is position-based: when the player's position equals the portal's position, you have completed the room. Again, it is quite safe to put the portal in the path of a guardian.
+
+Hard-wired special objects: Eugene and the Kong-Beast in MM, and Maria in JSW. Collision detection for these is pixel-based, and they kill you if they collide, but note that they are not technically guardians! Also note that they will kill you if they collide with an item, since items are drawn first! Also the bed and the toilet in JSW (position-based), and the solar beams in MM (colour-based).
+
+It is instructive to pause on the time-frame in which you get killed, to see what has and what hasn't been drawn yet.
+
+Room formats: https://web.archive.org/web/20030212201036/http://www.cs.man.ac.uk:80/~broada/spectrum/willy/format.html
+
+Music: https://web.archive.org/web/20030204175058/http://www.cs.man.ac.uk:80/~broada/spectrum/willy/music.html
+128bit music: https://web.archive.org/web/20030112192743/http://www.seasip.demon.co.uk:80/Jsw/jswtune.html
+
