@@ -159,10 +159,82 @@ class Guardian:
         self.ypos = start_y
         self.image = pygame.image.load('cat.png')
         (self.width, self.height) = self.image.get_rect().size
+        self.direction = "right"
+
+    def move(self, screen):
+        print("self.xpos: ", self.xpos, " vs ", screen.xboundary_left)
+        if self.xpos >= screen.xboundary_right:
+            self.direction = "left"
+        if self.xpos <= screen.xboundary_left:
+            self.direction = "right"
+        if self.direction == "right":
+            self.xpos += 10
+        elif self.direction == "left":
+            self.xpos -= 10
 
     def display(self, screen):
-        screen.DISPLAYSURF.blit(self.image, (screen.xboundary_right - self.width, screen.yboundary_bottom - self.height))
-        
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,screen.yboundary_bottom - 20))
+        return
+
+class TrumpetNose(Guardian):
+    def __init__(self, start_x, start_y, willyScale):
+        Guardian.__init__(self, start_x, start_y)
+        # moving left animation sprites
+        self.trumpetNoseImgLeft = [
+            pygame.image.load('trumpetnose_left_1.png'),
+            pygame.image.load('trumpetnose_left_2.png'),
+            pygame.image.load('trumpetnose_left_3.png'),    
+            pygame.image.load('trumpetnose_left_4.png')
+        ]
+
+        # moving right animation sprites
+        self.trumpetNoseImgRight = [
+            pygame.image.load('trumpetnose_right_1.png'),
+            pygame.image.load('trumpetnose_right_2.png'),
+            pygame.image.load('trumpetnose_right_3.png'),    
+            pygame.image.load('trumpetnose_right_4.png')
+        ]
+
+        # scale the sprites up to larger
+        numImages = len(self.trumpetNoseImgRight)
+        for count in range(0, numImages):
+            (trumpetNoseImgHeight,trumpetNoseImgWidth) = self.trumpetNoseImgRight[count].get_rect().size
+            newHeight = int(trumpetNoseImgHeight * willyScale)
+            newWidth = int(trumpetNoseImgWidth * willyScale)
+            picture = pygame.transform.scale(self.trumpetNoseImgRight[count], (newHeight, newWidth))
+            self.trumpetNoseImgRight[count] = picture
+            (trumpetNoseImgHeight,trumpetNoseImgWidth) = self.trumpetNoseImgLeft[count].get_rect().size
+            newHeight = int(trumpetNoseImgHeight * willyScale)
+            newWidth = int(trumpetNoseImgWidth * willyScale)
+            picture = pygame.transform.scale(self.trumpetNoseImgLeft[count], (newHeight, newWidth))
+            self.trumpetNoseImgLeft[count] = picture
+        self.walkPos = 0
+        self.direction = "right"
+        self.startPosX = start_x
+        self.startPosY = start_y
+        self.endPosX = start_x + 100
+        self.endPosY = start_y
+
+    def move(self, screen):
+        if self.direction == "left":
+            self.image = self.trumpetNoseImgLeft[self.walkPos]
+            self.xpos -= 2
+        else: # direction == "right"
+            self.image = self.trumpetNoseImgRight[self.walkPos]
+            self.xpos += 2
+        self.walkPos += 1 # for animation
+        if self.walkPos == 4:
+            self.walkPos = 0
+        if self.xpos <= self.startPosX or self.xpos >= self.endPosX:
+            if self.direction == "left":
+                self.direction = "right"
+            else:
+                self.direction = "left"
+        return
+
+    def display(self, screen):
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))       
+
 class Willy:
     def __init__(self, start_x, start_y):
         # start bottom left
@@ -345,6 +417,7 @@ class Willy:
 
 def update(events, guardians, willy, screen):
     screen.displayBackground()
+    guardians.move(screen)
     guardians.display(screen)
     willy.move(events, screen)
     willy.display(screen)
@@ -353,13 +426,12 @@ def update(events, guardians, willy, screen):
 def main():
     events = Events()
     screen = Screen()
-    guardians = Guardian(200,200)
-    # draw room
-    # draw guardians
-    
-    startx = screen.xboundary_left
-    starty = screen.yboundary_bottom
-    willy = Willy(0, screen.yboundary_bottom)
+    willyStartX = screen.xboundary_left
+    willyStartY = screen.yboundary_bottom
+    willy = Willy(willyStartX, willyStartY)
+    trumpetNoseStartX = screen.xboundary_right - 100
+    trumpetNoseStartY = screen.yboundary_bottom
+    guardians = TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale)
     clock = pygame.time.Clock()
 
     print("Manic Miner is running")
