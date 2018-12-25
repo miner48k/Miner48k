@@ -153,6 +153,16 @@ class Screen:
     def displayBackground(self):
         self.DISPLAYSURF.fill(self.BLACK)
 
+class Guardian:
+    def __init__(self, start_x, start_y):
+        self.xpos = start_x
+        self.ypos = start_y
+        self.image = pygame.image.load('cat.png')
+        (self.width, self.height) = self.image.get_rect().size
+
+    def display(self, screen):
+        screen.DISPLAYSURF.blit(self.image, (screen.xboundary_right - self.width, screen.yboundary_bottom - self.height))
+        
 class Willy:
     def __init__(self, start_x, start_y):
         # start bottom left
@@ -333,8 +343,9 @@ class Willy:
         else:
             screen.DISPLAYSURF.blit(self.willyImgRight[self.willyWalk], (self.willyx, self.willyy))
 
-def update(events, willy, screen):
+def update(events, guardians, willy, screen):
     screen.displayBackground()
+    guardians.display(screen)
     willy.move(events, screen)
     willy.display(screen)
     pygame.display.update()
@@ -342,6 +353,10 @@ def update(events, willy, screen):
 def main():
     events = Events()
     screen = Screen()
+    guardians = Guardian(200,200)
+    # draw room
+    # draw guardians
+    
     startx = screen.xboundary_left
     starty = screen.yboundary_bottom
     willy = Willy(0, screen.yboundary_bottom)
@@ -351,7 +366,7 @@ def main():
     
     while True:
         events.check()
-        update(events, willy, screen)
+        update(events, guardians, willy, screen)
         clock.tick(screen.FPS)
 
 main()
