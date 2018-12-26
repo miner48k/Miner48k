@@ -3,7 +3,7 @@
 # rooms: http://jswremakes.emuunlim.com/Mmt/Manic%20Miner%20Room%20Format.htm
 # -8 -8 -6 -6 -4 -4 -2 -2 0 0 2 2 4 4 6 6 8 8
 
-import os, sys, math, re, logging
+import os, sys, math, re, logging, pdb
 # load pygame without getting its hello message
 with open(os.devnull, 'w') as f:
     # disable stdout
@@ -149,17 +149,60 @@ class Screen:
         self.xboundary_right = self.max_x - 50 # willyImgWidth*2
         self.yboundary_top = 5
         self.yboundary_bottom = self.max_y - 50 # willyImgHeight*2
+        self.collisionCount = 0
 
     def displayBackground(self):
         self.DISPLAYSURF.fill(self.BLACK)
 
+    def displayBlocks(self):
+        return
+
+    def displayConveyors(self):
+        return
+
+    def checkCollisions(self, willy, guardians):
+        willy_left = willy.xpos
+        willy_right = willy.xpos + willy.width
+        willy_top = willy.ypos
+        willy_bottom = willy.ypos + willy.height
+        # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
+        # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
+        for guardian in guardians:
+            guardian_left = guardian.xpos
+            guardian_right = guardian.xpos + guardian.width
+            guardian_top = guardian.ypos
+            guardian_bottom = guardian.ypos + guardian.height
+            horizontal = False
+            vertical = False
+            collision = False
+            # print("guardian: ", guardian.name, ": (", guardian.xpos, ",", guardian.ypos, ")")
+            # print("          (", guardian_left, ",", guardian_top, ") to (", guardian_right, ",", guardian_bottom, ")")
+            if willy_right >= guardian_left and willy_right <= guardian_right:
+                horizontal = True
+            if willy_left <= guardian_right and willy_left >= guardian_left:
+                horizontal = True
+            if willy_bottom >= guardian_top and willy_bottom <= guardian_bottom:
+                vertical = True
+            if willy_top <= guardian_bottom and willy_top >= guardian_top:
+                vertical = True
+            if horizontal == True and vertical == True:
+                collision = True
+            if collision == True:
+                print("collision: ", self.collisionCount)
+                self.collisionCount += 1
+                # pdb.set_trace()
+                return True
+
 class Guardian:
-    def __init__(self, start_x, start_y):
+    def __init__(self, start_x, start_y, name = "NoName"):
         self.xpos = start_x
         self.ypos = start_y
+        self.startxpos = start_x
+        self.startypos = start_y
         self.image = pygame.image.load('cat.png')
         (self.width, self.height) = self.image.get_rect().size
         self.direction = "right"
+        self.name = name
 
     def move(self, screen):
         print("self.xpos: ", self.xpos, " vs ", screen.xboundary_left)
@@ -176,9 +219,14 @@ class Guardian:
         screen.DISPLAYSURF.blit(self.image, (self.xpos,screen.yboundary_bottom - 20))
         return
 
+    def restart(self):
+         self.xpos = self.startxpos
+         self.ypos = self.startypos
+         self.direction = "right"
+
 class TrumpetNose(Guardian):
     def __init__(self, start_x, start_y, willyScale):
-        Guardian.__init__(self, start_x, start_y)
+        Guardian.__init__(self, start_x, start_y, "TrumpetNose")
         # moving left animation sprites
         self.trumpetNoseImgLeft = [
             pygame.image.load('trumpetnose_left_1.png'),
@@ -198,20 +246,22 @@ class TrumpetNose(Guardian):
         # scale the sprites up to larger
         numImages = len(self.trumpetNoseImgRight)
         for count in range(0, numImages):
-            (trumpetNoseImgHeight,trumpetNoseImgWidth) = self.trumpetNoseImgRight[count].get_rect().size
+            (trumpetNoseImgWidth, trumpetNoseImgHeight) = self.trumpetNoseImgRight[count].get_rect().size
             newHeight = int(trumpetNoseImgHeight * willyScale)
             newWidth = int(trumpetNoseImgWidth * willyScale)
-            picture = pygame.transform.scale(self.trumpetNoseImgRight[count], (newHeight, newWidth))
+            picture = pygame.transform.scale(self.trumpetNoseImgRight[count], (newWidth, newHeight))
             self.trumpetNoseImgRight[count] = picture
-            (trumpetNoseImgHeight,trumpetNoseImgWidth) = self.trumpetNoseImgLeft[count].get_rect().size
+            (trumpetNoseImgWidth,trumpetNoseImgHeight) = self.trumpetNoseImgLeft[count].get_rect().size
             newHeight = int(trumpetNoseImgHeight * willyScale)
             newWidth = int(trumpetNoseImgWidth * willyScale)
-            picture = pygame.transform.scale(self.trumpetNoseImgLeft[count], (newHeight, newWidth))
+            picture = pygame.transform.scale(self.trumpetNoseImgLeft[count], (newWidth,newHeight))
             self.trumpetNoseImgLeft[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            print("TrumpetNose Width: ", self.width)
+            print("TrumpetNose Height: ", self.height)
         self.walkPos = 0
         self.direction = "right"
-        self.startPosX = start_x
-        self.startPosY = start_y
         self.endPosX = start_x + 100
         self.endPosY = start_y
 
@@ -225,7 +275,7 @@ class TrumpetNose(Guardian):
         self.walkPos += 1 # for animation
         if self.walkPos == 4:
             self.walkPos = 0
-        if self.xpos <= self.startPosX or self.xpos >= self.endPosX:
+        if self.xpos <= self.startxpos or self.xpos >= self.endPosX:
             if self.direction == "left":
                 self.direction = "right"
             else:
@@ -247,8 +297,8 @@ class Willy:
         # starting position
         self.willystartx = start_x
         self.willystarty = start_y
-        self.willyx = start_x           # willy's x location; start at left of screen
-        self.willyy = start_y           # willy's y location; start at bottom of screen
+        self.xpos = start_x           # willy's x location; start at left of screen
+        self.ypos = start_y           # willy's y location; start at bottom of screen
         self.direction = "right";       # start willy off facing right
         self.walking = False            # is willy walking or standing still?
 
@@ -277,18 +327,23 @@ class Willy:
         # scale the sprites up to larger
         numImages = len(self.willyImgRight)
         for count in range(0, numImages):
-            (willyImgHeight,willyImgWidth) = self.willyImgRight[count].get_rect().size
-            # print("dimensions: ", willyImgHeight, willyImgWidth)
+            (willyImgWidth,willyImgHeight) = self.willyImgRight[count].get_rect().size
+            # print("dimensions: ", willyImgWidth, willyImgHeight)
             newHeight = int(willyImgHeight * self.willyScale)
             newWidth = int(willyImgWidth * self.willyScale)
-            picture = pygame.transform.scale(self.willyImgRight[count], (newHeight, newWidth))
+            picture = pygame.transform.scale(self.willyImgRight[count], (newWidth, newHeight))
             self.willyImgRight[count] = picture
-            (willyImgHeight,willyImgWidth) = self.willyImgLeft[count].get_rect().size
-            # print("dimensions: ", willyImgHeight, willyImgWidth)
+            (willyImgWidth,willyImgHeight) = self.willyImgLeft[count].get_rect().size
+            # print("dimensions: ", willyImgWidth, willyImgHeight)
             newHeight = int(willyImgHeight * self.willyScale)
             newWidth = int(willyImgWidth * self.willyScale)
-            picture = pygame.transform.scale(self.willyImgLeft[count], (newHeight, newWidth))
+            picture = pygame.transform.scale(self.willyImgLeft[count], (newWidth, newHeight))
             self.willyImgLeft[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            print("Willy Width: ", self.width)
+            print("Willy Height: ", self.height)
+
 
     def getJumpHeight(self, jumpPosition, jumpDistance, jumpHeight):
         jumpPosition //= 2
@@ -300,30 +355,30 @@ class Willy:
 
     def jump(self, screen):
         if self.willyJump > (self.willyJumpDistance / 2): # rising
-            if self.willyy > screen.yboundary_top: # don't go off the top of the screen
+            if self.ypos > screen.yboundary_top: # don't go off the top of the screen
                 jumpPos = (self.willyJumpDistance - self.willyJump)
                 toJump = self.getJumpHeight(jumpPos, self.willyJumpDistance, self.willyJumpHeight)
-                self.willyy -= toJump
+                self.ypos -= toJump
             if self.direction == "right" and self.walking:
-                if (self.willyx < screen.xboundary_right): # don't go off the screen to the right
-                    self.willyx += self.xdistance
+                if (self.xpos < screen.xboundary_right): # don't go off the screen to the right
+                    self.xpos += self.xdistance
                     self.willyWalk += 1
             elif self.direction == "left" and self.walking:
-                if (self.willyx > screen.xboundary_left): # don't go off the screen to the right
-                    self.willyx -= self.xdistance
+                if (self.xpos > screen.xboundary_left): # don't go off the screen to the right
+                    self.xpos -= self.xdistance
                     self.willyWalk += 1
         else: # falling
-            if (self.willyy < screen.yboundary_bottom): # don't go off the bottom of the screen
+            if (self.ypos < screen.yboundary_bottom): # don't go off the bottom of the screen
                 jumpPos = (self.willyJumpDistance - self.willyJump)
                 toJump = self.getJumpHeight(jumpPos, self.willyJumpDistance, self.willyJumpHeight)
-                self.willyy += toJump
+                self.ypos += toJump
             if self.direction == "right" and self.walking:
-                if (self.willyx < screen.xboundary_right): # don't go off the screen to the right
-                    self.willyx += self.xdistance
+                if (self.xpos < screen.xboundary_right): # don't go off the screen to the right
+                    self.xpos += self.xdistance
                     self.willyWalk += 1
             elif self.direction == "left" and self.walking:
-                if (self.willyx > screen.xboundary_left): # don't go off the screen to the right
-                    self.willyx -= self.xdistance
+                if (self.xpos > screen.xboundary_left): # don't go off the screen to the right
+                    self.xpos -= self.xdistance
                     self.willyWalk += 1
         if self.willyWalk == len(self.willyImgRight):
             self.willyWalk = 0
@@ -346,8 +401,12 @@ class Willy:
         #     print("No keys pressed")
         
         if events.keysPressed["dev1"]:
-            self.willyx = self.willystartx
-            self.willyy = self.willystarty
+            self.xpos = self.willystartx
+            self.ypos = self.willystarty
+        
+        if events.keysPressed["dev2"]:
+            self.xpos += 200
+            self.ypos = self.willystarty
         
         # are we already jumping?
         if self.willyJump > 0:
@@ -380,8 +439,8 @@ class Willy:
             else:
                 # print("*** walk left")
                 self.direction = "left"
-                if self.willyx > screen.xboundary_left:
-                    self.willyx -= self.xdistance
+                if self.xpos > screen.xboundary_left:
+                    self.xpos -= self.xdistance
                     self.willyWalk += 1            
                     if self.willyWalk == len(self.willyImgLeft):
                         self.willyWalk = 0
@@ -395,9 +454,9 @@ class Willy:
             else:
                 # print("*** walk right")
                 self.direction = "right"
-                if self.willyx < screen.xboundary_right:
+                if self.xpos < screen.xboundary_right:
                     # print("walking right")
-                    self.willyx += self.xdistance
+                    self.xpos += self.xdistance
                     self.willyWalk += 1
                     if self.willyWalk == len(self.willyImgRight):
                         self.willyWalk = 0
@@ -411,16 +470,29 @@ class Willy:
     
     def display(self, screen):
         if self.direction == "left":
-            screen.DISPLAYSURF.blit(self.willyImgLeft[self.willyWalk], (self.willyx, self.willyy))
+            screen.DISPLAYSURF.blit(self.willyImgLeft[self.willyWalk], (self.xpos, self.ypos))
         else:
-            screen.DISPLAYSURF.blit(self.willyImgRight[self.willyWalk], (self.willyx, self.willyy))
+            screen.DISPLAYSURF.blit(self.willyImgRight[self.willyWalk], (self.xpos, self.ypos))
+
+    def restart(self):
+        self.xpos = self.willystartx
+        self.ypos = self.willystarty
 
 def update(events, guardians, willy, screen):
     screen.displayBackground()
-    guardians.move(screen)
-    guardians.display(screen)
+    screen.displayBlocks()
+    screen.displayConveyors()
+    for guardian in guardians:
+        guardian.move(screen)
+        guardian.display(screen)
     willy.move(events, screen)
     willy.display(screen)
+    if screen.checkCollisions(willy, guardians):
+        for guardian in guardians:
+            guardian.restart()
+        willy.restart()
+        # deduct one from lives
+        # flash screen
     pygame.display.update()
     
 def main():
@@ -431,7 +503,12 @@ def main():
     willy = Willy(willyStartX, willyStartY)
     trumpetNoseStartX = screen.xboundary_right - 100
     trumpetNoseStartY = screen.yboundary_bottom
-    guardians = TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale)
+    guardians = []
+    guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
+    # guardians.append(TrumpetNose(100, 1, willy.willyScale))
+    # guardians.append(TrumpetNose(200, 1, willy.willyScale))
+    # guardians.append(TrumpetNose(50, 50, willy.willyScale))
+    # guardians.append(TrumpetNose(1, 50, willy.willyScale))
     clock = pygame.time.Clock()
 
     print("Manic Miner is running")
