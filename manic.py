@@ -160,30 +160,31 @@ class Screen:
     def displayConveyors(self):
         return
 
-    def checkCollisions(self, willy, guardians):
+    def checkCollisions(self, willy, keys, guardians):
         willy_left = willy.xpos
         willy_right = willy.xpos + willy.width
         willy_top = willy.ypos
         willy_bottom = willy.ypos + willy.height
         # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
-        for guardian in guardians:
-            guardian_left = guardian.xpos
-            guardian_right = guardian.xpos + guardian.width
-            guardian_top = guardian.ypos
-            guardian_bottom = guardian.ypos + guardian.height
+        objects = guardians + keys
+        for object in objects:
+            object_left = object.xpos
+            object_right = object.xpos + object.width
+            object_top = object.ypos
+            object_bottom = object.ypos + object.height
             horizontal = False
             vertical = False
             collision = False
-            # print("guardian: ", guardian.name, ": (", guardian.xpos, ",", guardian.ypos, ")")
-            # print("          (", guardian_left, ",", guardian_top, ") to (", guardian_right, ",", guardian_bottom, ")")
-            if willy_right >= guardian_left and willy_right <= guardian_right:
+            # print("object: ", object.name, ": (", object.xpos, ",", object.ypos, ")")
+            # print("          (", object_left, ",", object_top, ") to (", object_right, ",", object_bottom, ")")
+            if willy_right >= object_left and willy_right <= object_right:
                 horizontal = True
-            if willy_left <= guardian_right and willy_left >= guardian_left:
+            if willy_left <= object_right and willy_left >= object_left:
                 horizontal = True
-            if willy_bottom >= guardian_top and willy_bottom <= guardian_bottom:
+            if willy_bottom >= object_top and willy_bottom <= object_bottom:
                 vertical = True
-            if willy_top <= guardian_bottom and willy_top >= guardian_top:
+            if willy_top <= object_bottom and willy_top >= object_top:
                 vertical = True
             if horizontal == True and vertical == True:
                 collision = True
@@ -191,10 +192,95 @@ class Screen:
                 print("collision: ", self.collisionCount)
                 self.collisionCount += 1
                 # pdb.set_trace()
-                return True
+                return object
 
-class Guardian:
+class Object:
     def __init__(self, start_x, start_y, name = "NoName"):
+        self.xpos = start_x
+        self.ypos = start_y
+        self.startxpos = start_x
+        self.startypos = start_y
+        self.type = "Object"
+
+    def restart(self):
+        self.xpos = self.startxpos
+        self.ypos = self.startypos
+
+class MovingObject(Object):
+    def __init__(self, start_x, start_y, name = "MovingObject"):
+        Object.__init__(self, start_x, start_y, name)
+        self.type = "MovingObject"
+
+    def restart(self):
+        Object.restart(self)
+        self.direction = "right"
+
+class StationaryObject(Object):
+    def __init__(self, start_x, start_y, name = "StationaryObject"):
+        Object.__init__(self, start_x, start_y, name)
+        self.type = "MovingObject"
+        
+class Key(StationaryObject):
+    def __init__(self, start_x, start_y, scale):
+        StationaryObject.__init__(self, start_x, start_y, "Key")
+        self.type = "Key"
+        self.appears = True
+        print("x,y = ", self.xpos, ",", self.ypos)
+        # animation sprites
+        self.keyImg = [
+            pygame.image.load('key_1.png'), # magenta
+            pygame.image.load('key_2.png'), # yellow
+            pygame.image.load('key_3.png'), # cyan
+            pygame.image.load('key_4.png')  # green
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.keyImg)
+        for count in range(0, numImages):
+            (keyImgWidth, keyImgHeight) = self.keyImg[count].get_rect().size
+            newHeight = int(keyImgHeight * scale)
+            newWidth = int(keyImgWidth * scale)
+            picture = pygame.transform.scale(self.keyImg[count], (newWidth, newHeight))
+            self.keyImg[count] = picture
+            (keyImgWidth,keyImgHeight) = self.keyImg[count].get_rect().size
+            newHeight = int(keyImgHeight * scale)
+            newWidth = int(keyImgWidth * scale)
+            picture = pygame.transform.scale(self.keyImg[count], (newWidth,newHeight))
+            self.keyImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            print("Key Width: ", self.width)
+            print("Key Height: ", self.height)
+        self.animPos = 0
+
+    def disappear(self):
+        self.appears = False
+
+    def move(self, screen):
+        # this object doesn't move, but
+        # the item's ink-colour cycles from magenta to yellow to cyan to green
+        self.image = self.keyImg[self.animPos]
+        self.animPos += 1
+        if self.animPos == 4:
+            self.animPos = 0
+
+    def display(self, screen):
+        if self.appears == True:
+            screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
+        return
+
+    def restart(self):
+        StationaryObject.restart(self)
+        self.appears = True
+
+class Escalator(StationaryObject):
+    def __init__(self, start_x, start_y, name = "Escalator"):
+        StationaryObject.__init__(self, start_x, start_y, name)
+        self.type = "Escalator"
+        
+class Guardian(MovingObject):
+    def __init__(self, start_x, start_y, name = "Guardian"):
+        MovingObject.__init__(self, start_x, start_y, name)
+        self.type = "Guardian"
         self.xpos = start_x
         self.ypos = start_y
         self.startxpos = start_x
@@ -202,7 +288,6 @@ class Guardian:
         self.image = pygame.image.load('cat.png')
         (self.width, self.height) = self.image.get_rect().size
         self.direction = "right"
-        self.name = name
 
     def move(self, screen):
         print("self.xpos: ", self.xpos, " vs ", screen.xboundary_left)
@@ -216,13 +301,8 @@ class Guardian:
             self.xpos -= 10
 
     def display(self, screen):
-        screen.DISPLAYSURF.blit(self.image, (self.xpos,screen.yboundary_bottom - 20))
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
         return
-
-    def restart(self):
-         self.xpos = self.startxpos
-         self.ypos = self.startypos
-         self.direction = "right"
 
 class TrumpetNose(Guardian):
     def __init__(self, start_x, start_y, willyScale):
@@ -478,21 +558,30 @@ class Willy:
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
-def update(events, guardians, willy, screen):
+def update(events, keys, guardians, willy, screen):
     screen.displayBackground()
     screen.displayBlocks()
     screen.displayConveyors()
+    willy.move(events, screen)
+    willy.display(screen)
     for guardian in guardians:
         guardian.move(screen)
         guardian.display(screen)
-    willy.move(events, screen)
-    willy.display(screen)
-    if screen.checkCollisions(willy, guardians):
-        for guardian in guardians:
-            guardian.restart()
-        willy.restart()
-        # deduct one from lives
-        # flash screen
+    for key in keys:
+        key.move(screen)
+        key.display(screen)
+    collision = screen.checkCollisions(willy, keys, guardians)    
+    if collision:
+        if collision.type == "Guardian":
+            for guardian in guardians:
+                guardian.restart()
+            for key in keys:
+                key.restart()
+            willy.restart()
+            # deduct one from lives
+            # flash screen
+        elif collision.type == "Key":
+            key.disappear()
     pygame.display.update()
     
 def main():
@@ -501,21 +590,23 @@ def main():
     willyStartX = screen.xboundary_left
     willyStartY = screen.yboundary_bottom
     willy = Willy(willyStartX, willyStartY)
-    trumpetNoseStartX = screen.xboundary_right - 100
+    trumpetNoseStartX = screen.xboundary_right - 300
     trumpetNoseStartY = screen.yboundary_bottom
     guardians = []
+    keys = []
     guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
-    # guardians.append(TrumpetNose(100, 1, willy.willyScale))
+    guardians.append(TrumpetNose(100, 1, willy.willyScale))
     # guardians.append(TrumpetNose(200, 1, willy.willyScale))
     # guardians.append(TrumpetNose(50, 50, willy.willyScale))
     # guardians.append(TrumpetNose(1, 50, willy.willyScale))
+    keys.append(Key(100, 380, 1.7))
     clock = pygame.time.Clock()
 
     print("Manic Miner is running")
     
     while True:
         events.check()
-        update(events, guardians, willy, screen)
+        update(events, keys, guardians, willy, screen)
         clock.tick(screen.FPS)
 
 main()
