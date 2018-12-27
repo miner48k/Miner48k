@@ -141,7 +141,9 @@ class Sound:
         self.playMusic = True
         self.mainMusic = pygame.mixer.music.load('maingame.ogg')
         self.death = pygame.mixer.Sound('death.ogg')
+        self.titleTune = pygame.mixer.Sound('titletune.ogg')
         self.jumpFall = pygame.mixer.Sound('jumpfall.ogg')
+        self.gameOver = pygame.mixer.Sound('gameover.ogg')
 
     def mainMusicOff(self):
         self.playMusic = False
@@ -166,6 +168,10 @@ class Sound:
         if (self.playMusic):
             pygame.mixer.music.unpause()
 
+    def waitUntilFinished(self):
+        while pygame.mixer.get_busy():
+            pass
+
     def pauseMainMusic(self):
         pygame.mixer.music.pause()
 
@@ -177,6 +183,14 @@ class Sound:
 
     def stopJumpFallSound(self):
         self.jumpFall.stop()
+
+    def playGameOver(self):
+        self.gameOver.play()
+        self.waitUntilFinished()
+
+    def playTitleTune(self):
+        self.titleTune.play()
+        self.waitUntilFinished()
 
 class Screen:
     def __init__(self):
@@ -686,16 +700,21 @@ def main():
 
     print("Manic Miner is running")
     running = True
+
+    # show title screen and play title music
+    # sound.playTitleTune()
+
     while running and player.lives > 0:
         running = events.check()
         update(player, events, keys, guardians, willy, screen, sound)
         clock.tick(screen.FPS)
-    pygame.quit()
     if player.lives == 0:
         print("Game Over!")
+        sound.playGameOver()
     else:
         print("Game quit - lives remaining: ", player.lives)
     print("Final score: ", player.score)
+    pygame.quit()
     return
 
 main()
