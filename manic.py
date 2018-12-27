@@ -2,6 +2,7 @@
 
 # rooms: http://jswremakes.emuunlim.com/Mmt/Manic%20Miner%20Room%20Format.htm
 # -8 -8 -6 -6 -4 -4 -2 -2 0 0 2 2 4 4 6 6 8 8
+# https://www.gamejournal.it/the-sound-of-1-bit-technical-constraint-as-a-driver-for-musical-creativity-on-the-48k-sinclair-zx-spectrum/
 
 import os, sys, math, re, logging, pdb
 # load pygame without getting its hello message
@@ -89,8 +90,7 @@ class Events:
                     self.keysPressed["test"] = True
                 if e.key == pygame.K_ESCAPE or e.key == pygame.K_q:
                     print("Manic Miner quit")
-                    pygame.quit()
-                    sys.exit()
+                    return False
                 if e.key == pygame.K_SPACE or e.key == pygame.K_UP:
                     # print("up pressed")
                     self.keysPressed["jump"] = True
@@ -127,8 +127,8 @@ class Events:
                     self.keysPressed["dev2"] = False
             elif e.type == QUIT:
                     print("Manic Miner quit")
-                    pygame.quit()
-                    sys.exit()
+                    return False
+        return True
         
 class Screen:
     def __init__(self):
@@ -169,30 +169,30 @@ class Screen:
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
         objects = guardians + keys
         for object in objects:
-            object_left = object.xpos
-            object_right = object.xpos + object.width
-            object_top = object.ypos
-            object_bottom = object.ypos + object.height
-            horizontal = False
-            vertical = False
-            collision = False
-            # print("object: ", object.name, ": (", object.xpos, ",", object.ypos, ")")
-            # print("          (", object_left, ",", object_top, ") to (", object_right, ",", object_bottom, ")")
-            if willy_right >= object_left and willy_right <= object_right:
-                horizontal = True
-            if willy_left <= object_right and willy_left >= object_left:
-                horizontal = True
-            if willy_bottom >= object_top and willy_bottom <= object_bottom:
-                vertical = True
-            if willy_top <= object_bottom and willy_top >= object_top:
-                vertical = True
-            if horizontal == True and vertical == True:
-                collision = True
-            if collision == True:
-                print("collision: ", self.collisionCount)
-                self.collisionCount += 1
-                # pdb.set_trace()
-                return object
+            if object.collidable == True:
+                object_left = object.xpos
+                object_right = object.xpos + object.width
+                object_top = object.ypos
+                object_bottom = object.ypos + object.height
+                horizontal = False
+                vertical = False
+                collision = False
+                # print("object: ", object.name, ": (", object.xpos, ",", object.ypos, ")")
+                # print("          (", object_left, ",", object_top, ") to (", object_right, ",", object_bottom, ")")
+                if willy_right >= object_left and willy_right <= object_right:
+                    horizontal = True
+                if willy_left <= object_right and willy_left >= object_left:
+                    horizontal = True
+                if willy_bottom >= object_top and willy_bottom <= object_bottom:
+                    vertical = True
+                if willy_top <= object_bottom and willy_top >= object_top:
+                    vertical = True
+                if horizontal == True and vertical == True:
+                    collision = True
+                if collision == True:
+                    print("collision #", self.collisionCount, " with ", object.name)
+                    self.collisionCount += 1
+                    return object
 
 class Object:
     def __init__(self, start_x, start_y, name = "NoName"):
@@ -201,6 +201,8 @@ class Object:
         self.startxpos = start_x
         self.startypos = start_y
         self.type = "Object"
+        self.name = name
+        self.collidable = False
 
     def restart(self):
         self.xpos = self.startxpos
@@ -219,12 +221,14 @@ class StationaryObject(Object):
     def __init__(self, start_x, start_y, name = "StationaryObject"):
         Object.__init__(self, start_x, start_y, name)
         self.type = "MovingObject"
+        self.collidable = True
         
 class Key(StationaryObject):
-    def __init__(self, start_x, start_y, scale):
-        StationaryObject.__init__(self, start_x, start_y, "Key")
+    def __init__(self, name, start_x, start_y, scale):
+        StationaryObject.__init__(self, start_x, start_y, name)
         self.type = "Key"
         self.appears = True
+        self.scorevalue = 100
         print("x,y = ", self.xpos, ",", self.ypos)
         # animation sprites
         self.keyImg = [
@@ -254,6 +258,7 @@ class Key(StationaryObject):
 
     def disappear(self):
         self.appears = False
+        self.collidable = False
 
     def move(self, screen):
         # this object doesn't move, but
@@ -271,6 +276,7 @@ class Key(StationaryObject):
     def restart(self):
         StationaryObject.restart(self)
         self.appears = True
+        self.collidable = True
 
 class Escalator(StationaryObject):
     def __init__(self, start_x, start_y, name = "Escalator"):
@@ -288,6 +294,7 @@ class Guardian(MovingObject):
         self.image = pygame.image.load('cat.png')
         (self.width, self.height) = self.image.get_rect().size
         self.direction = "right"
+        self.collidable = True
 
     def move(self, screen):
         print("self.xpos: ", self.xpos, " vs ", screen.xboundary_left)
@@ -348,10 +355,10 @@ class TrumpetNose(Guardian):
     def move(self, screen):
         if self.direction == "left":
             self.image = self.trumpetNoseImgLeft[self.walkPos]
-            self.xpos -= 2
+            self.xpos -= 4
         else: # direction == "right"
             self.image = self.trumpetNoseImgRight[self.walkPos]
-            self.xpos += 2
+            self.xpos += 4
         self.walkPos += 1 # for animation
         if self.walkPos == 4:
             self.walkPos = 0
@@ -365,6 +372,11 @@ class TrumpetNose(Guardian):
     def display(self, screen):
         screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))       
 
+class Player:
+    def __init__(self):
+        self.score = 0
+        self.lives = 3
+        
 class Willy:
     def __init__(self, start_x, start_y):
         # start bottom left
@@ -558,7 +570,17 @@ class Willy:
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
-def update(events, keys, guardians, willy, screen):
+def loseLifeAndRestart(player, keys, guardians, willy):
+    for guardian in guardians:
+        guardian.restart()
+    for key in keys:
+        key.restart()
+    willy.restart()
+    player.lives -= 1
+    # flash screen
+
+
+def update(player, events, keys, guardians, willy, screen):
     screen.displayBackground()
     screen.displayBlocks()
     screen.displayConveyors()
@@ -573,20 +595,18 @@ def update(events, keys, guardians, willy, screen):
     collision = screen.checkCollisions(willy, keys, guardians)    
     if collision:
         if collision.type == "Guardian":
-            for guardian in guardians:
-                guardian.restart()
-            for key in keys:
-                key.restart()
-            willy.restart()
-            # deduct one from lives
-            # flash screen
+            loseLifeAndRestart(player, keys, guardians, willy)
         elif collision.type == "Key":
-            key.disappear()
+            print("collided with ", collision.name)
+            collision.disappear()
+            # pdb.set_trace()
+            player.score += key.scorevalue
     pygame.display.update()
     
 def main():
     events = Events()
     screen = Screen()
+    player = Player()
     willyStartX = screen.xboundary_left
     willyStartY = screen.yboundary_bottom
     willy = Willy(willyStartX, willyStartY)
@@ -599,14 +619,23 @@ def main():
     # guardians.append(TrumpetNose(200, 1, willy.willyScale))
     # guardians.append(TrumpetNose(50, 50, willy.willyScale))
     # guardians.append(TrumpetNose(1, 50, willy.willyScale))
-    keys.append(Key(100, 380, 1.7))
+    keys.append(Key("key1", 100, 380, 1.7))
+    keys.append(Key("key2", 150, 380, 1.7))
+    keys.append(Key("key3", 200, 380, 1.7))
     clock = pygame.time.Clock()
 
     print("Manic Miner is running")
-    
-    while True:
-        events.check()
-        update(events, keys, guardians, willy, screen)
+    running = True
+    while running and player.lives > 0:
+        running = events.check()
+        update(player, events, keys, guardians, willy, screen)
         clock.tick(screen.FPS)
+    pygame.quit()
+    if player.lives == 0:
+        print("Game Over!")
+    else:
+        print("Game quit - lives remaining: ", player.lives)
+    print("Final score: ", player.score)
+    return
 
 main()
