@@ -199,7 +199,7 @@ class Screen:
         self.fpsClock = pygame.time.Clock()
         # set up the window
         self.max_x = 640
-        self.max_y = 480
+        self.max_y = 320
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), 0, 32)
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.FULLSCREEN)
         self.DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.RESIZABLE)
@@ -213,6 +213,9 @@ class Screen:
         self.yboundary_bottom = self.max_y - 50 # willyImgHeight*2
         self.collisionCount = 0
 
+    # given coordinates (x,y), return the corresponding 
+    # def getScreenLoc(self, x, y):
+        
     def displayBackground(self):
         self.DISPLAYSURF.fill(self.BLACK)
 
@@ -222,6 +225,17 @@ class Screen:
     def displayConveyors(self):
         return
 
+    def load(self, roomData):
+        # roomData is a 2D array, 32 wide by 16 tall, each block corresponding to a wall, floor, guardian, key, etc.
+        print("start of map")
+        for row in range (0,15): # each row
+            # print("row: ", row)
+            for col in range (0,31): # each column
+                # print("col: ", col)
+                print(roomData[row][col],end=', ')
+            print()
+        print("end of map")
+    
     def checkCollisions(self, willy, keys, guardians):
         willy_left = willy.xpos
         willy_right = willy.xpos + willy.width
@@ -257,7 +271,8 @@ class Screen:
                     return object
 
 class Object:
-    def __init__(self, start_x, start_y, name = "NoName"):
+    def __init__(self, start_x, start_y, name="NoName"):
+        print("Creating Object: ", name)
         self.xpos = start_x
         self.ypos = start_y
         self.startxpos = start_x
@@ -271,7 +286,8 @@ class Object:
         self.ypos = self.startypos
 
 class MovingObject(Object):
-    def __init__(self, start_x, start_y, name = "MovingObject"):
+    def __init__(self, start_x, start_y, name="MovingObject"):
+        print("Creating MovingObject: ", name)
         Object.__init__(self, start_x, start_y, name)
         self.type = "MovingObject"
 
@@ -280,13 +296,47 @@ class MovingObject(Object):
         self.direction = "right"
 
 class StationaryObject(Object):
-    def __init__(self, start_x, start_y, name = "StationaryObject"):
-        Object.__init__(self, start_x, start_y, name)
+    def __init__(self, x, y, name="StationaryObject"):
+        print("Creating StationaryObject: ", name)
+        Object.__init__(self, x, y, name="StationaryObject")
         self.type = "MovingObject"
         self.collidable = True
-        
+
+class Floor(StationaryObject):
+    def __init__(self, x, y, scale, name="Floor"):
+        print("Creating Floor: ", name)
+        StationaryObject.__init__(self, x, y, name)
+        self.type = "Floor"
+        print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.floorImg = [
+            pygame.image.load('floor_1.png'), # red
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.floorImg)
+        for count in range(0, numImages):
+            (floorImgWidth, floorImgHeight) = self.floorImg[count].get_rect().size
+            newHeight = int(floorImgHeight * scale)
+            newWidth = int(floorImgWidth * scale)
+            picture = pygame.transform.scale(self.floorImg[count], (newWidth, newHeight))
+            self.floorImg[count] = picture
+            (floorImgWidth,floorImgHeight) = self.floorImg[count].get_rect().size
+            newHeight = int(floorImgHeight * scale)
+            newWidth = int(floorImgWidth * scale)
+            picture = pygame.transform.scale(self.floorImg[count], (newWidth,newHeight))
+            self.floorImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            print("Floor Width: ", self.width)
+            print("Floor Height: ", self.height)
+        self.image = self.floorImg[0]
+
+    def display(self, screen):
+        image = self.floorImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
 class Key(StationaryObject):
-    def __init__(self, name, start_x, start_y, scale):
+    def __init__(self, start_x, start_y, scale, name="Key"):
         StationaryObject.__init__(self, start_x, start_y, name)
         self.type = "Key"
         self.appears = True
@@ -306,11 +356,6 @@ class Key(StationaryObject):
             newHeight = int(keyImgHeight * scale)
             newWidth = int(keyImgWidth * scale)
             picture = pygame.transform.scale(self.keyImg[count], (newWidth, newHeight))
-            self.keyImg[count] = picture
-            (keyImgWidth,keyImgHeight) = self.keyImg[count].get_rect().size
-            newHeight = int(keyImgHeight * scale)
-            newWidth = int(keyImgWidth * scale)
-            picture = pygame.transform.scale(self.keyImg[count], (newWidth,newHeight))
             self.keyImg[count] = picture
             self.width = newWidth
             self.height = newHeight
@@ -341,7 +386,7 @@ class Key(StationaryObject):
         self.collidable = True
 
 class Escalator(StationaryObject):
-    def __init__(self, start_x, start_y, name = "Escalator"):
+    def __init__(self, start_x, start_y, scale, name = "Escalator"):
         StationaryObject.__init__(self, start_x, start_y, name)
         self.type = "Escalator"
         
@@ -374,8 +419,8 @@ class Guardian(MovingObject):
         return
 
 class TrumpetNose(Guardian):
-    def __init__(self, start_x, start_y, willyScale):
-        Guardian.__init__(self, start_x, start_y, "TrumpetNose")
+    def __init__(self, start_x, start_y, willyScale, name="TrumpetNose"):
+        Guardian.__init__(self, start_x, start_y, name)
         # moving left animation sprites
         self.trumpetNoseImgLeft = [
             pygame.image.load('trumpetnose_left_1.png'),
@@ -649,11 +694,13 @@ def loseLifeAndRestart(events, player, keys, guardians, willy, sound):
     sound.playDeathSound()
     sound.playMainMusic()
 
-def update(player, events, keys, guardians, willy, screen, sound):
+def update(player, events, keys, guardians, willy, screen, sound, floors):
     if events.keysPressed["music"]:
         print("toggle music")
         sound.toggleMainMusic()
     screen.displayBackground()
+    for floor in floors:
+        floor.display(screen)
     screen.displayBlocks()
     screen.displayConveyors()
     willy.move(events, screen, sound)
@@ -674,6 +721,32 @@ def update(player, events, keys, guardians, willy, screen, sound):
             # pdb.set_trace()
             player.score += key.scorevalue
     pygame.display.update()
+
+W = 0x01 # willy start location
+B = 0x10 # brick
+F = 0x11 # floor
+P = 0x12 # plant
+V = 0x13 # conveyor
+C = 0x14 # crumbling floor
+
+centralCavern = [
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,0,B,B,B,C,C,C,C,F,F,F,B],
+    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    ]
     
 def main():
     events = Events()
@@ -687,14 +760,17 @@ def main():
     trumpetNoseStartY = screen.yboundary_bottom
     guardians = []
     keys = []
+    floors = []
+    screen.load(centralCavern)
+    floors.append(Floor(50, 50, 1.4, "floor1"))
     guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
     guardians.append(TrumpetNose(100, 1, willy.willyScale))
     # guardians.append(TrumpetNose(200, 1, willy.willyScale))
     # guardians.append(TrumpetNose(50, 50, willy.willyScale))
     # guardians.append(TrumpetNose(1, 50, willy.willyScale))
-    keys.append(Key("key1", 100, 380, 1.7))
-    keys.append(Key("key2", 150, 380, 1.7))
-    keys.append(Key("key3", 200, 380, 1.7))
+    keys.append(Key(100, 380, willy.willyScale, "key1"))
+    keys.append(Key(150, 380, willy.willyScale, "key2"))
+    keys.append(Key(200, 380, willy.willyScale, "key3"))
     clock = pygame.time.Clock()
     sound.startMainMusic()
 
@@ -706,7 +782,7 @@ def main():
 
     while running and player.lives > 0:
         running = events.check()
-        update(player, events, keys, guardians, willy, screen, sound)
+        update(player, events, keys, guardians, willy, screen, sound, floors)
         clock.tick(screen.FPS)
     if player.lives == 0:
         print("Game Over!")
