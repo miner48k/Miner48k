@@ -3,6 +3,7 @@
 # rooms: http://jswremakes.emuunlim.com/Mmt/Manic%20Miner%20Room%20Format.htm
 # -8 -8 -6 -6 -4 -4 -2 -2 0 0 2 2 4 4 6 6 8 8
 # https://www.gamejournal.it/the-sound-of-1-bit-technical-constraint-as-a-driver-for-musical-creativity-on-the-48k-sinclair-zx-spectrum/
+# D=8*(1+ABS(J-8));
 
 import os, sys, math, re, logging, pdb
 # load pygame without getting its hello message
@@ -79,6 +80,7 @@ class Events:
             "dev1": False,
             "dev2": False,
             "test": False,
+            "music": False,
         }
 
     def check(self):
@@ -106,6 +108,8 @@ class Events:
                     self.keysPressed["dev1"] = True
                 if e.key == pygame.K_k:
                     self.keysPressed["dev2"] = True
+                if e.key == pygame.K_m:
+                    self.keysPressed["music"] = True
             elif e.type == KEYUP:
                 if e.key == pygame.K_t:
                     # print("test released")
@@ -125,11 +129,55 @@ class Events:
                 if e.key == pygame.K_k:
                     # print("dev2 released")
                     self.keysPressed["dev2"] = False
+                if e.key == pygame.K_m:
+                    self.keysPressed["music"] = False
             elif e.type == QUIT:
                     print("Manic Miner quit")
                     return False
         return True
+
+class Sound:
+    def __init__(self):
+        self.playMusic = True
+        self.mainMusic = pygame.mixer.music.load('maingame.ogg')
+        self.death = pygame.mixer.Sound('death.ogg')
+        self.jumpFall = pygame.mixer.Sound('jumpfall.ogg')
+
+    def mainMusicOff(self):
+        self.playMusic = False
+
+    def mainMusicOn(self):
+        self.playMusic = True
+
+    def toggleMainMusic(self):
+        print("self.playMusic before: ", self.playMusic)
+        self.playMusic = not self.playMusic
+        print("self.playMusic after: ", self.playMusic)
+        if self.playMusic == False:
+            self.pauseMainMusic()
+        else:
+            self.playMainMusic()
         
+    def startMainMusic(self):
+        if (self.playMusic):
+            pygame.mixer.music.play(-1, 0.15)
+
+    def playMainMusic(self):
+        if (self.playMusic):
+            pygame.mixer.music.unpause()
+
+    def pauseMainMusic(self):
+        pygame.mixer.music.pause()
+
+    def playDeathSound(self):
+        self.death.play()
+
+    def playJumpFallSound(self):
+        self.jumpFall.play()
+
+    def stopJumpFallSound(self):
+        self.jumpFall.stop()
+
 class Screen:
     def __init__(self):
         pygame.init()
@@ -445,7 +493,7 @@ class Willy:
         # print("  heightToAdd:  ", heightToAdd)
         return heightToAdd * self.willyJumpFactor
 
-    def jump(self, screen):
+    def jump(self, screen, sound):
         if self.willyJump > (self.willyJumpDistance / 2): # rising
             if self.ypos > screen.yboundary_top: # don't go off the top of the screen
                 jumpPos = (self.willyJumpDistance - self.willyJump)
@@ -477,9 +525,10 @@ class Willy:
         self.willyJump -= 1
         if self.willyJump == 1:
             self.walking = False
+            sound.stopJumpFallSound()
         return self.willyJump
 
-    def move(self, events, screen):
+    def move(self, events, screen, sound):
         # if events.keysPressed["left"] or events.keysPressed["right"] or events.keysPressed["jump"]:
         #     print("Keys: ", end='', flush=True)
         #     if events.keysPressed["left"]:
@@ -503,7 +552,7 @@ class Willy:
         # are we already jumping?
         if self.willyJump > 0:
             # already jumping
-            self.jump(screen)
+            self.jump(screen, sound)
             self.willyJump -= 1
             # don't handle any more keys
             return
@@ -525,6 +574,7 @@ class Willy:
         if events.keysPressed["left"]:
             if events.keysPressed["jump"]:
                 # print("*** jump left")
+                sound.playJumpFallSound()
                 self.willyJump = self.willyJumpDistance;
                 self.direction = "left"
                 self.walking = True
@@ -540,6 +590,7 @@ class Willy:
             # print("*** handling right key")
             if events.keysPressed["jump"]:
                 # print("*** jump right")
+                sound.playJumpFallSound()
                 self.willyJump = self.willyJumpDistance;
                 self.direction = "right"
                 self.walking = True
@@ -554,6 +605,7 @@ class Willy:
                         self.willyWalk = 0
         elif events.keysPressed["jump"]:
             # print("*** jump in place")
+            sound.playJumpFallSound()
             self.willyJump = self.willyJumpDistance;
             self.walking = False
         else:
@@ -570,7 +622,8 @@ class Willy:
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
-def loseLifeAndRestart(player, keys, guardians, willy):
+def loseLifeAndRestart(events, player, keys, guardians, willy, sound):
+    sound.pauseMainMusic()
     for guardian in guardians:
         guardian.restart()
     for key in keys:
@@ -578,13 +631,18 @@ def loseLifeAndRestart(player, keys, guardians, willy):
     willy.restart()
     player.lives -= 1
     # flash screen
+    # play death sound
+    sound.playDeathSound()
+    sound.playMainMusic()
 
-
-def update(player, events, keys, guardians, willy, screen):
+def update(player, events, keys, guardians, willy, screen, sound):
+    if events.keysPressed["music"]:
+        print("toggle music")
+        sound.toggleMainMusic()
     screen.displayBackground()
     screen.displayBlocks()
     screen.displayConveyors()
-    willy.move(events, screen)
+    willy.move(events, screen, sound)
     willy.display(screen)
     for guardian in guardians:
         guardian.move(screen)
@@ -595,7 +653,7 @@ def update(player, events, keys, guardians, willy, screen):
     collision = screen.checkCollisions(willy, keys, guardians)    
     if collision:
         if collision.type == "Guardian":
-            loseLifeAndRestart(player, keys, guardians, willy)
+            loseLifeAndRestart(events, player, keys, guardians, willy, sound)
         elif collision.type == "Key":
             print("collided with ", collision.name)
             collision.disappear()
@@ -607,6 +665,7 @@ def main():
     events = Events()
     screen = Screen()
     player = Player()
+    sound = Sound()
     willyStartX = screen.xboundary_left
     willyStartY = screen.yboundary_bottom
     willy = Willy(willyStartX, willyStartY)
@@ -623,12 +682,13 @@ def main():
     keys.append(Key("key2", 150, 380, 1.7))
     keys.append(Key("key3", 200, 380, 1.7))
     clock = pygame.time.Clock()
+    sound.startMainMusic()
 
     print("Manic Miner is running")
     running = True
     while running and player.lives > 0:
         running = events.check()
-        update(player, events, keys, guardians, willy, screen)
+        update(player, events, keys, guardians, willy, screen, sound)
         clock.tick(screen.FPS)
     pygame.quit()
     if player.lives == 0:
