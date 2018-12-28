@@ -193,13 +193,13 @@ class Sound:
         self.waitUntilFinished()
 
 class Screen:
-    def __init__(self):
+    def __init__(self, x, y):
         pygame.init()
         self.FPS = 30 # frames per second setting
         self.fpsClock = pygame.time.Clock()
         # set up the window
-        self.max_x = 640
-        self.max_y = 320
+        self.max_x = x
+        self.max_y = y
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), 0, 32)
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.FULLSCREEN)
         self.DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.RESIZABLE)
@@ -236,14 +236,13 @@ class Screen:
             print()
         print("end of map")
     
-    def checkCollisions(self, willy, keys, guardians):
+    def checkCollisions(self, willy, objects):
         willy_left = willy.xpos
         willy_right = willy.xpos + willy.width
         willy_top = willy.ypos
         willy_bottom = willy.ypos + willy.height
         # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
-        objects = guardians + keys
         for object in objects:
             if object.collidable == True:
                 object_left = object.xpos
@@ -333,6 +332,39 @@ class Floor(StationaryObject):
 
     def display(self, screen):
         image = self.floorImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
+class Plant(StationaryObject):
+    def __init__(self, x, y, scale, name="Floor"):
+        print("Creating Plant: ", name)
+        StationaryObject.__init__(self, x, y, name)
+        self.type = "Plant"
+        print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.plantImg = [
+            pygame.image.load('plant_1.png'),
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.plantImg)
+        for count in range(0, numImages):
+            (plantImgWidth, plantImgHeight) = self.plantImg[count].get_rect().size
+            newHeight = int(plantImgHeight * scale)
+            newWidth = int(plantImgWidth * scale)
+            picture = pygame.transform.scale(self.plantImg[count], (newWidth, newHeight))
+            self.plantImg[count] = picture
+            (plantImgWidth,plantImgHeight) = self.plantImg[count].get_rect().size
+            newHeight = int(plantImgHeight * scale)
+            newWidth = int(plantImgWidth * scale)
+            picture = pygame.transform.scale(self.plantImg[count], (newWidth,newHeight))
+            self.plantImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            print("Floor Width: ", self.width)
+            print("Floor Height: ", self.height)
+        self.image = self.plantImg[0]
+
+    def display(self, screen):
+        image = self.plantImg[0]
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class Key(StationaryObject):
@@ -694,7 +726,7 @@ def loseLifeAndRestart(events, player, keys, guardians, willy, sound):
     sound.playDeathSound()
     sound.playMainMusic()
 
-def update(player, events, keys, guardians, willy, screen, sound, floors):
+def update(player, events, keys, guardians, willy, screen, sound, floors, vegetation):
     if events.keysPressed["music"]:
         print("toggle music")
         sound.toggleMainMusic()
@@ -702,24 +734,27 @@ def update(player, events, keys, guardians, willy, screen, sound, floors):
     for floor in floors:
         floor.display(screen)
     screen.displayBlocks()
+    for plant in vegetation:
+        plant.display(screen)
     screen.displayConveyors()
-    willy.move(events, screen, sound)
-    willy.display(screen)
     for guardian in guardians:
         guardian.move(screen)
         guardian.display(screen)
     for key in keys:
         key.move(screen)
         key.display(screen)
-    collision = screen.checkCollisions(willy, keys, guardians)    
+    collision = screen.checkCollisions(willy, keys + guardians + floors + vegetation)    
+    freezeWilly = False
     if collision:
-        if collision.type == "Guardian":
+        if collision.type == "Guardian" or collision.type == "Plant":
             loseLifeAndRestart(events, player, keys, guardians, willy, sound)
         elif collision.type == "Key":
             print("collided with ", collision.name)
             collision.disappear()
             # pdb.set_trace()
             player.score += key.scorevalue
+    willy.move(events, screen, sound)
+    willy.display(screen)
     pygame.display.update()
 
 W = 0x01 # willy start location
@@ -750,7 +785,7 @@ centralCavern = [
     
 def main():
     events = Events()
-    screen = Screen()
+    screen = Screen(640,320)
     player = Player()
     sound = Sound()
     willyStartX = screen.xboundary_left
@@ -761,16 +796,18 @@ def main():
     guardians = []
     keys = []
     floors = []
+    vegetation = []
     screen.load(centralCavern)
-    floors.append(Floor(50, 50, 1.4, "floor1"))
+    floors.append(Floor(50, screen.yboundary_bottom, willy.willyScale * 0.7, "floor1"))
+    vegetation.append(Plant(120, screen.yboundary_bottom + 20, willy.willyScale * 0.7, "plant1"))
     guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
     guardians.append(TrumpetNose(100, 1, willy.willyScale))
     # guardians.append(TrumpetNose(200, 1, willy.willyScale))
     # guardians.append(TrumpetNose(50, 50, willy.willyScale))
     # guardians.append(TrumpetNose(1, 50, willy.willyScale))
-    keys.append(Key(100, 380, willy.willyScale, "key1"))
-    keys.append(Key(150, 380, willy.willyScale, "key2"))
-    keys.append(Key(200, 380, willy.willyScale, "key3"))
+    keys.append(Key(100, 100, willy.willyScale, "key1"))
+    # keys.append(Key(120, 100, willy.willyScale, "key2"))
+    # keys.append(Key(130, 100, willy.willyScale, "key3"))
     clock = pygame.time.Clock()
     sound.startMainMusic()
 
@@ -782,7 +819,7 @@ def main():
 
     while running and player.lives > 0:
         running = events.check()
-        update(player, events, keys, guardians, willy, screen, sound, floors)
+        update(player, events, keys, guardians, willy, screen, sound, floors, vegetation)
         clock.tick(screen.FPS)
     if player.lives == 0:
         print("Game Over!")
