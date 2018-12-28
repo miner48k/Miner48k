@@ -2,7 +2,7 @@
 
 # rooms: http://jswremakes.emuunlim.com/Mmt/Manic%20Miner%20Room%20Format.htm
 # -8 -8 -6 -6 -4 -4 -2 -2 0 0 2 2 4 4 6 6 8 8
-# https://www.gamejournal.it/the-sound-of-1-bit-technical-constraint-as-a-driver-for-musical-creativity-on-the-48k-sinclair-zx-spectrum/
+# https://www.gamejournal.it/the-sound-of-1-bit-technical-constraint-as-a-driver-for-musical-creativity-on-the-48k-sinclair-zx-spectrum/z
 # D=8*(1+ABS(J-8));
 
 import os, sys, math, re, logging, pdb
@@ -216,6 +216,7 @@ class Screen:
         # set up the window
         self.max_x = x
         self.max_y = y
+        self.scale = 2.4           # how much to scale the loaded sprites
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), 0, 32)
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.FULLSCREEN)
         self.DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.RESIZABLE)
@@ -547,9 +548,8 @@ class Player:
         self.lives = 3
         
 class Willy:
-    def __init__(self, start_x, start_y):
-        # start bottom left
-        self.willyScale = 2.4           # how much to scale the loaded sprites
+    def __init__(self, start_x, start_y, scale):
+        print("Creating Willy at ", start_x, start_y)
         # motion distances
         self.xdistance = 4              # how far left and right motion moves Willy
         self.ydistance = 5              # how far jumping motion moves Willy on the y axis
@@ -591,14 +591,14 @@ class Willy:
         for count in range(0, numImages):
             (willyImgWidth,willyImgHeight) = self.willyImgRight[count].get_rect().size
             # print("dimensions: ", willyImgWidth, willyImgHeight)
-            newHeight = int(willyImgHeight * self.willyScale)
-            newWidth = int(willyImgWidth * self.willyScale)
+            newHeight = int(willyImgHeight * scale)
+            newWidth = int(willyImgWidth * scale)
             picture = pygame.transform.scale(self.willyImgRight[count], (newWidth, newHeight))
             self.willyImgRight[count] = picture
             (willyImgWidth,willyImgHeight) = self.willyImgLeft[count].get_rect().size
             # print("dimensions: ", willyImgWidth, willyImgHeight)
-            newHeight = int(willyImgHeight * self.willyScale)
-            newWidth = int(willyImgWidth * self.willyScale)
+            newHeight = int(willyImgHeight * scale)
+            newWidth = int(willyImgWidth * scale)
             picture = pygame.transform.scale(self.willyImgLeft[count], (newWidth, newHeight))
             self.willyImgLeft[count] = picture
             self.width = newWidth
@@ -828,12 +828,12 @@ centralCavern = [
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,0,0,0,P,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,0,B,B,B,C,C,C,C,F,F,F,B],
-    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,W,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,0,B,B,B,C,C,C,C,F,F,F,B],
+    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,F,F,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
     [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
     ]
     
@@ -844,34 +844,55 @@ def main():
     sound = Sound()
     willyStartX = 97 # screen.xboundary_left
     willyStartY = 237 # screen.yboundary_bottom
-    willy = Willy(willyStartX, willyStartY)
-    trumpetNoseStartX = screen.xboundary_right - 300
-    trumpetNoseStartY = screen.yboundary_bottom
+    trumpetNoseStartX = screen.xboundary_right - 410
+    trumpetNoseStartY = screen.yboundary_bottom - 108
     guardians = []
     keys = []
     floors = []
     vegetation = []
     screen.load(centralCavern)
-    for cellx in range(0,31,10):
-        for celly in range(0,15,10):
+    scale = 0.7
+    for cellx in range(0,32):
+        for celly in range(0,16):
+            cellContents = centralCavern[celly][cellx]
+            print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
-            plantName = "plant" + "-" + str(cellx) + "-" + str(celly)
-            vegetation.append(Plant(screenx, screeny, willy.willyScale * 0.7, plantName))
-    floors.append(Floor(100, screen.yboundary_bottom, willy.willyScale * 0.7, "floor1"))
-    floors.append(Floor(120, screen.yboundary_bottom - 30, willy.willyScale * 0.7, "floor1"))
-    floors.append(Floor(140, screen.yboundary_bottom - 60, willy.willyScale * 0.7, "floor1"))
-    floors.append(Floor(90, screen.yboundary_bottom + 40, willy.willyScale * 0.7, "floor1"))
-    floors.append(Floor(80, screen.yboundary_bottom + 40, willy.willyScale * 0.7, "floor1"))
-    floors.append(Floor(70, screen.yboundary_bottom + 40, willy.willyScale * 0.7, "floor1"))
-    vegetation.append(Plant(120, screen.yboundary_bottom + 20, willy.willyScale * 0.7, "plant1"))
-    guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
-    guardians.append(TrumpetNose(100, 1, willy.willyScale))
-    # guardians.append(TrumpetNose(200, 1, willy.willyScale))
-    # guardians.append(TrumpetNose(50, 50, willy.willyScale))
-    # guardians.append(TrumpetNose(1, 50, willy.willyScale))
-    keys.append(Key(100, 140, willy.willyScale, "key1"))
-    # keys.append(Key(120, 100, willy.willyScale, "key2"))
-    # keys.append(Key(130, 100, willy.willyScale, "key3"))
+            if cellContents == B:
+                cellName = "brick" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+            elif cellContents == F:
+                cellName = "floor" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+            elif cellContents == P:
+                cellName = "plant" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+            elif cellContents == V:
+                cellName = "conveyor" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+            elif cellContents == C:
+                cellName = "crumble" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+            elif cellContents == W:
+                cellName = "willy" + "-" + str(cellx) + "-" + str(celly)
+                print("found willy!")
+                # floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+                willy = Willy(screenx, screeny, screen.scale)
+    # vegetation.append(Plant(screenx, screeny, screen.scale * 0.7, plantName))
+    # floors.append(Floor(100, screen.yboundary_bottom, screen.scale * 0.7, "floor1"))
+    # floors.append(Floor(120, screen.yboundary_bottom - 30, screen.scale * 0.7, "floor1"))
+    # floors.append(Floor(140, screen.yboundary_bottom - 60, screen.scale * 0.7, "floor1"))
+    # floors.append(Floor(90, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
+    # floors.append(Floor(80, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
+    # floors.append(Floor(70, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
+    # vegetation.append(Plant(120, screen.yboundary_bottom + 20, screen.scale * 0.7, "plant1"))
+    guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, screen.scale))
+    # guardians.append(TrumpetNose(100, 1, screen.scale))
+    # guardians.append(TrumpetNose(200, 1, screen.scale))
+    # guardians.append(TrumpetNose(50, 50, screen.scale))
+    # guardians.append(TrumpetNose(1, 50, screen.scale))
+    keys.append(Key(100, 140, screen.scale, "key1"))
+    # keys.append(Key(120, 100, screen.scale, "key2"))
+    # keys.append(Key(130, 100, screen.scale, "key3"))
     clock = pygame.time.Clock()
     sound.startMainMusic()
 
