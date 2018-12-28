@@ -79,6 +79,7 @@ class Events:
             "jump": False,
             "dev1": False,
             "dev2": False,
+            "dev3": False,
             "test": False,
             "music": False,
         }
@@ -108,6 +109,8 @@ class Events:
                     self.keysPressed["dev1"] = True
                 if e.key == pygame.K_k:
                     self.keysPressed["dev2"] = True
+                if e.key == pygame.K_l:
+                    self.keysPressed["dev3"] = True
                 if e.key == pygame.K_m:
                     self.keysPressed["music"] = True
             elif e.type == KEYUP:
@@ -129,6 +132,9 @@ class Events:
                 if e.key == pygame.K_k:
                     # print("dev2 released")
                     self.keysPressed["dev2"] = False
+                if e.key == pygame.K_l:
+                    # print("dev3 released")
+                    self.keysPressed["dev3"] = False
                 if e.key == pygame.K_m:
                     self.keysPressed["music"] = False
             elif e.type == QUIT:
@@ -291,6 +297,7 @@ class Screen:
                             print("touched top of floor")
                             return Collision(object, "landed")
                     return Collision(object, "collision")
+        return None       
 
 class Object:
     def __init__(self, start_x, start_y, name="NoName"):
@@ -561,6 +568,7 @@ class Willy:
         self.willyJumpFactor = 1.2
         self.testMode = False
         self.test = Test()
+        self.falling = False
 
         # moving left animation sprites
         self.willyImgLeft = [
@@ -667,11 +675,21 @@ class Willy:
             self.xpos += 200
             self.ypos = self.willystarty
         
+        if events.keysPressed["dev3"]:
+            print("Willy location: (", self.xpos, ",", self.ypos, ")")
+        
         # are we already jumping?
         if self.willyJump > 0:
             # already jumping
             self.jump(screen, sound)
             self.willyJump -= 1
+            # don't handle any more keys
+            return
+
+        # are we falling?
+        if self.falling == True:
+            print("falling")
+            self.ypos += 8
             # don't handle any more keys
             return
 
@@ -772,7 +790,7 @@ def update(player, events, keys, guardians, willy, screen, sound, floors, vegeta
     for key in keys:
         key.move(screen)
         key.display(screen)
-    collision = screen.checkCollisions(willy, keys + guardians + floors + vegetation)    
+    collision = screen.checkCollisions(willy, keys + guardians + floors + vegetation)
     freezeWilly = False
     if collision is not None:
         if collision.collidingObject.type == "Guardian" or collision.collidingObject.type == "Plant":
@@ -782,9 +800,13 @@ def update(player, events, keys, guardians, willy, screen, sound, floors, vegeta
             collision.collidingObject.disappear()
             # pdb.set_trace()
             player.score += key.scorevalue
-        elif collision.collidingObject.type == "Floor" and collision.event == "landed" and willy.willyJump <= willy.willyJumpDistance / 2:
+        elif collision.collidingObject.type == "Floor" and collision.event == "landed" \
+             and willy.willyJump <= willy.willyJumpDistance / 2:
             print("landed")
             willy.stopJumping(sound)
+        willy.falling = False
+    else:
+       willy.falling = True     
     willy.move(events, screen, sound)
     willy.display(screen)
     pygame.display.update()
@@ -820,8 +842,8 @@ def main():
     screen = Screen(640,320)
     player = Player()
     sound = Sound()
-    willyStartX = screen.xboundary_left
-    willyStartY = screen.yboundary_bottom
+    willyStartX = 97 # screen.xboundary_left
+    willyStartY = 237 # screen.yboundary_bottom
     willy = Willy(willyStartX, willyStartY)
     trumpetNoseStartX = screen.xboundary_right - 300
     trumpetNoseStartY = screen.yboundary_bottom
@@ -836,13 +858,18 @@ def main():
             plantName = "plant" + "-" + str(cellx) + "-" + str(celly)
             vegetation.append(Plant(screenx, screeny, willy.willyScale * 0.7, plantName))
     floors.append(Floor(100, screen.yboundary_bottom, willy.willyScale * 0.7, "floor1"))
+    floors.append(Floor(120, screen.yboundary_bottom - 30, willy.willyScale * 0.7, "floor1"))
+    floors.append(Floor(140, screen.yboundary_bottom - 60, willy.willyScale * 0.7, "floor1"))
+    floors.append(Floor(90, screen.yboundary_bottom + 40, willy.willyScale * 0.7, "floor1"))
+    floors.append(Floor(80, screen.yboundary_bottom + 40, willy.willyScale * 0.7, "floor1"))
+    floors.append(Floor(70, screen.yboundary_bottom + 40, willy.willyScale * 0.7, "floor1"))
     vegetation.append(Plant(120, screen.yboundary_bottom + 20, willy.willyScale * 0.7, "plant1"))
     guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
     guardians.append(TrumpetNose(100, 1, willy.willyScale))
     # guardians.append(TrumpetNose(200, 1, willy.willyScale))
     # guardians.append(TrumpetNose(50, 50, willy.willyScale))
     # guardians.append(TrumpetNose(1, 50, willy.willyScale))
-    keys.append(Key(100, 100, willy.willyScale, "key1"))
+    keys.append(Key(100, 140, willy.willyScale, "key1"))
     # keys.append(Key(120, 100, willy.willyScale, "key2"))
     # keys.append(Key(130, 100, willy.willyScale, "key3"))
     clock = pygame.time.Clock()
