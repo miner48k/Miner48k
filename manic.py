@@ -192,6 +192,16 @@ class Sound:
         self.titleTune.play()
         self.waitUntilFinished()
 
+    def stopAll(self):
+        self.titleTune.stop()
+        self.jumpFall.stop()
+        pygame.mixer.music.stop()
+
+class Collision:
+    def __init__(self, object, event):
+        self.collidingObject = object
+        self.event = event
+
 class Screen:
     def __init__(self, x, y):
         pygame.init()
@@ -212,7 +222,14 @@ class Screen:
         self.yboundary_top = 5
         self.yboundary_bottom = self.max_y - 50 # willyImgHeight*2
         self.collisionCount = 0
+        self.cellWidth = self.max_x / 32
+        self.cellHeight = self.max_y / 16
 
+    def cellToCoords(self, x, y):
+        coord_x = x * self.cellWidth
+        coord_y = y * self.cellHeight
+        return (coord_x,coord_y)
+    
     # given coordinates (x,y), return the corresponding 
     # def getScreenLoc(self, x, y):
         
@@ -265,9 +282,15 @@ class Screen:
                 if horizontal == True and vertical == True:
                     collision = True
                 if collision == True:
-                    print("collision #", self.collisionCount, " with ", object.name)
+                    # print("collision #", self.collisionCount, " with ", object.name)
                     self.collisionCount += 1
-                    return object
+                    if object.type == "Floor":
+                        print("willy_bottom: ", willy_bottom)
+                        print("object_top: ", object_top)
+                        if willy_bottom >= object_top and willy_bottom <= object_top+10:
+                            print("touched top of floor")
+                            return Collision(object, "landed")
+                    return Collision(object, "collision")
 
 class Object:
     def __init__(self, start_x, start_y, name="NoName"):
@@ -297,7 +320,7 @@ class MovingObject(Object):
 class StationaryObject(Object):
     def __init__(self, x, y, name="StationaryObject"):
         print("Creating StationaryObject: ", name)
-        Object.__init__(self, x, y, name="StationaryObject")
+        Object.__init__(self, x, y, name)
         self.type = "MovingObject"
         self.collidable = True
 
@@ -615,9 +638,13 @@ class Willy:
             self.willyWalk = 0
         self.willyJump -= 1
         if self.willyJump == 1:
-            self.walking = False
-            sound.stopJumpFallSound()
+            self.stopJumping(sound)
         return self.willyJump
+
+    def stopJumping(self, sound):
+        self.walking = False
+        self.willyJump = 0
+        sound.stopJumpFallSound()
 
     def move(self, events, screen, sound):
         # if events.keysPressed["left"] or events.keysPressed["right"] or events.keysPressed["jump"]:
@@ -710,6 +737,7 @@ class Willy:
             screen.DISPLAYSURF.blit(self.willyImgRight[self.willyWalk], (self.xpos, self.ypos))
 
     def restart(self):
+        self.willyJump = 0
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
@@ -720,6 +748,7 @@ def loseLifeAndRestart(events, player, keys, guardians, willy, sound):
     for key in keys:
         key.restart()
     willy.restart()
+    sound.stopJumpFallSound()
     player.lives -= 1
     # flash screen
     # play death sound
@@ -745,14 +774,17 @@ def update(player, events, keys, guardians, willy, screen, sound, floors, vegeta
         key.display(screen)
     collision = screen.checkCollisions(willy, keys + guardians + floors + vegetation)    
     freezeWilly = False
-    if collision:
-        if collision.type == "Guardian" or collision.type == "Plant":
+    if collision is not None:
+        if collision.collidingObject.type == "Guardian" or collision.collidingObject.type == "Plant":
             loseLifeAndRestart(events, player, keys, guardians, willy, sound)
-        elif collision.type == "Key":
-            print("collided with ", collision.name)
-            collision.disappear()
+        elif collision.collidingObject.type == "Key":
+            print("collided with ", collision.collidingObject.name)
+            collision.collidingObject.disappear()
             # pdb.set_trace()
             player.score += key.scorevalue
+        elif collision.collidingObject.type == "Floor" and collision.event == "landed" and willy.willyJump <= willy.willyJumpDistance / 2:
+            print("landed")
+            willy.stopJumping(sound)
     willy.move(events, screen, sound)
     willy.display(screen)
     pygame.display.update()
@@ -798,7 +830,12 @@ def main():
     floors = []
     vegetation = []
     screen.load(centralCavern)
-    floors.append(Floor(50, screen.yboundary_bottom, willy.willyScale * 0.7, "floor1"))
+    for cellx in range(0,31,10):
+        for celly in range(0,15,10):
+            (screenx,screeny) = screen.cellToCoords(cellx, celly)
+            plantName = "plant" + "-" + str(cellx) + "-" + str(celly)
+            vegetation.append(Plant(screenx, screeny, willy.willyScale * 0.7, plantName))
+    floors.append(Floor(100, screen.yboundary_bottom, willy.willyScale * 0.7, "floor1"))
     vegetation.append(Plant(120, screen.yboundary_bottom + 20, willy.willyScale * 0.7, "plant1"))
     guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, willy.willyScale))
     guardians.append(TrumpetNose(100, 1, willy.willyScale))
@@ -822,6 +859,7 @@ def main():
         update(player, events, keys, guardians, willy, screen, sound, floors, vegetation)
         clock.tick(screen.FPS)
     if player.lives == 0:
+        sound.stopAll()
         print("Game Over!")
         sound.playGameOver()
     else:
