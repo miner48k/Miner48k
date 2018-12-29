@@ -211,7 +211,7 @@ class Collision:
 class Screen:
     def __init__(self, x, y):
         pygame.init()
-        self.FPS = 30 # frames per second setting
+        self.FPS = 15 # frames per second setting
         self.fpsClock = pygame.time.Clock()
         # set up the window
         self.max_x = x
@@ -249,24 +249,32 @@ class Screen:
     def displayConveyors(self):
         return
 
-    def load(self, roomData):
+    #def load(self, roomData):
         # roomData is a 2D array, 32 wide by 16 tall, each block corresponding to a wall, floor, guardian, key, etc.
-        print("start of map")
-        for row in range (0,15): # each row
+        # print("start of map")
+        #for row in range (0,15): # each row
             # print("row: ", row)
-            for col in range (0,31): # each column
+            # for col in range (0,31): # each column
                 # print("col: ", col)
-                print(roomData[row][col],end=', ')
-            print()
-        print("end of map")
+                # print(roomData[row][col],end=', ')
+            # print()
+        ## print("end of map")
     
-    def checkCollisions(self, willy, objects):
-        willy_left = willy.xpos
-        willy_right = willy.xpos + willy.width
-        willy_top = willy.ypos
-        willy_bottom = willy.ypos + willy.height
+    def checkCollisions(self, willy, objects, willyx=-1, willyy=-1):
+        # use either willy's current (x,y) by default, or a hypothetical (x,y) to see what would happen
+        if (willyx == -1):
+            willyx = willy.xpos
+        if (willyy == -1):
+            willyy = willy.ypos
+        willy_left = willyx
+        willy_right = willyx + willy.width
+        willy_top = willyy
+        willy_bottom = willyy + willy.height
         # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
+
+        collisionWatchList = ["floor-1-7"]
+
         for object in objects:
             if object.collidable == True:
                 object_left = object.xpos
@@ -278,7 +286,7 @@ class Screen:
                 collision = False
                 # print("object: ", object.name, ": (", object.xpos, ",", object.ypos, ")")
                 # print("          (", object_left, ",", object_top, ") to (", object_right, ",", object_bottom, ")")
-                if willy_right >= object_left and willy_right <= object_right:
+                if willy_right - 1 >= object_left and willy_right <= object_right:
                     horizontal = True
                 if willy_left <= object_right and willy_left >= object_left:
                     horizontal = True
@@ -289,20 +297,23 @@ class Screen:
                 if horizontal == True and vertical == True:
                     collision = True
                 if collision == True:
-                    # print("collision #", self.collisionCount, " with ", object.name)
+                    if object.name in collisionWatchList:
+                        print("collision #", self.collisionCount, " with ", object.name, " of type ", type(object), " at ", object.xpos, object.ypos)
                     self.collisionCount += 1
-                    if object.type == "Floor":
-                        print("willy_bottom: ", willy_bottom)
-                        print("object_top: ", object_top)
-                        if willy_bottom >= object_top and willy_bottom <= object_top+10:
-                            print("touched top of floor")
+                    if isinstance(object, StandableObject) and object.standable == True:
+                        # print("willy_bottom: ", willy_bottom)
+                        # print("object_top: ", object_top)
+                        if round(willy_bottom) >= object_top and round(willy_bottom) <= object_top + 5:
+                            # print("touched top of floor")
+                            # print("setting ypos to ", object_top)
+                            willy.ypos = object_top - willy.height
                             return Collision(object, "landed")
                     return Collision(object, "collision")
         return None       
 
 class Object:
     def __init__(self, start_x, start_y, name="NoName"):
-        print("Creating Object: ", name)
+        # print("Creating Object: ", name)
         self.xpos = start_x
         self.ypos = start_y
         self.startxpos = start_x
@@ -317,7 +328,7 @@ class Object:
 
 class MovingObject(Object):
     def __init__(self, start_x, start_y, name="MovingObject"):
-        print("Creating MovingObject: ", name)
+        # print("Creating MovingObject: ", name)
         Object.__init__(self, start_x, start_y, name)
         self.type = "MovingObject"
 
@@ -327,17 +338,22 @@ class MovingObject(Object):
 
 class StationaryObject(Object):
     def __init__(self, x, y, name="StationaryObject"):
-        print("Creating StationaryObject: ", name)
+        # print("Creating StationaryObject: ", name)
         Object.__init__(self, x, y, name)
-        self.type = "MovingObject"
+        self.type = "StationaryObject"
         self.collidable = True
 
-class Floor(StationaryObject):
+class StandableObject(StationaryObject):
+    def __init__(self, x, y, name="StandableObject"):
+        StationaryObject.__init__(self, x, y, name)
+        self.standable = True
+
+class Floor(StandableObject):
     def __init__(self, x, y, scale, name="Floor"):
         print("Creating Floor: ", name)
-        StationaryObject.__init__(self, x, y, name)
+        StandableObject.__init__(self, x, y, name)
         self.type = "Floor"
-        print("x,y = ", self.xpos, ",", self.ypos)
+        # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
         self.floorImg = [
             pygame.image.load('floor_1.png'), # red
@@ -357,12 +373,79 @@ class Floor(StationaryObject):
             self.floorImg[count] = picture
             self.width = newWidth
             self.height = newHeight
-            print("Floor Width: ", self.width)
-            print("Floor Height: ", self.height)
+            # print("Floor Width: ", self.width)
+            # print("Floor Height: ", self.height)
         self.image = self.floorImg[0]
 
     def display(self, screen):
         image = self.floorImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
+class CrumblingFloor(StandableObject):
+    def __init__(self, x, y, scale, name="Floor"):
+        print("Creating CrumblingFloor: ", name)
+        StandableObject.__init__(self, x, y, name)
+        self.type = "CrumblingFloor"
+        # print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.floorImg = [
+            pygame.image.load('crumble_1.png'),
+            # TODO: the rest of the crumbling floor animation here
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.floorImg)
+        for count in range(0, numImages):
+            (floorImgWidth, floorImgHeight) = self.floorImg[count].get_rect().size
+            newHeight = int(floorImgHeight * scale)
+            newWidth = int(floorImgWidth * scale)
+            picture = pygame.transform.scale(self.floorImg[count], (newWidth, newHeight))
+            self.floorImg[count] = picture
+            (floorImgWidth,floorImgHeight) = self.floorImg[count].get_rect().size
+            newHeight = int(floorImgHeight * scale)
+            newWidth = int(floorImgWidth * scale)
+            picture = pygame.transform.scale(self.floorImg[count], (newWidth,newHeight))
+            self.floorImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            # print("Floor Width: ", self.width)
+            # print("Floor Height: ", self.height)
+        self.image = self.floorImg[0]
+
+    def display(self, screen):
+        image = self.floorImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
+class Brick(StandableObject):
+    def __init__(self, x, y, scale, name="Brick"):
+        print("Creating Brick: ", name)
+        StandableObject.__init__(self, x, y, name)
+        self.type = "Floor"
+        # print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.brickImg = [
+            pygame.image.load('brick_1.png'),
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.brickImg)
+        for count in range(0, numImages):
+            (brickImgWidth, brickImgHeight) = self.brickImg[count].get_rect().size
+            newHeight = int(brickImgHeight * scale)
+            newWidth = int(brickImgWidth * scale)
+            picture = pygame.transform.scale(self.brickImg[count], (newWidth, newHeight))
+            self.brickImg[count] = picture
+            (brickImgWidth,brickImgHeight) = self.brickImg[count].get_rect().size
+            newHeight = int(brickImgHeight * scale)
+            newWidth = int(brickImgWidth * scale)
+            picture = pygame.transform.scale(self.brickImg[count], (newWidth,newHeight))
+            self.brickImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            # print("Brick Width: ", self.width)
+            # print("Brick Height: ", self.height)
+        self.image = self.brickImg[0]
+
+    def display(self, screen):
+        image = self.brickImg[0]
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class Plant(StationaryObject):
@@ -370,7 +453,7 @@ class Plant(StationaryObject):
         print("Creating Plant: ", name)
         StationaryObject.__init__(self, x, y, name)
         self.type = "Plant"
-        print("x,y = ", self.xpos, ",", self.ypos)
+        # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
         self.plantImg = [
             pygame.image.load('plant_1.png'),
@@ -390,8 +473,8 @@ class Plant(StationaryObject):
             self.plantImg[count] = picture
             self.width = newWidth
             self.height = newHeight
-            print("Floor Width: ", self.width)
-            print("Floor Height: ", self.height)
+            # print("Plant Width: ", self.width)
+            # print("Plant Height: ", self.height)
         self.image = self.plantImg[0]
 
     def display(self, screen):
@@ -401,10 +484,10 @@ class Plant(StationaryObject):
 class Key(StationaryObject):
     def __init__(self, start_x, start_y, scale, name="Key"):
         StationaryObject.__init__(self, start_x, start_y, name)
+        print("Creating Key: ", name)
         self.type = "Key"
         self.appears = True
         self.scorevalue = 100
-        print("x,y = ", self.xpos, ",", self.ypos)
         # animation sprites
         self.keyImg = [
             pygame.image.load('key_1.png'), # magenta
@@ -422,8 +505,8 @@ class Key(StationaryObject):
             self.keyImg[count] = picture
             self.width = newWidth
             self.height = newHeight
-            print("Key Width: ", self.width)
-            print("Key Height: ", self.height)
+            # print("Key Width: ", self.width)
+            # print("Key Height: ", self.height)
         self.animPos = 0
 
     def disappear(self):
@@ -484,6 +567,8 @@ class Guardian(MovingObject):
 class TrumpetNose(Guardian):
     def __init__(self, start_x, start_y, willyScale, name="TrumpetNose"):
         Guardian.__init__(self, start_x, start_y, name)
+        self.subtype = "TrumpetNose"
+        print("Creating TrumpetNose: ", name)
         # moving left animation sprites
         self.trumpetNoseImgLeft = [
             pygame.image.load('trumpetnose_left_1.png'),
@@ -515,13 +600,17 @@ class TrumpetNose(Guardian):
             self.trumpetNoseImgLeft[count] = picture
             self.width = newWidth
             self.height = newHeight
-            print("TrumpetNose Width: ", self.width)
-            print("TrumpetNose Height: ", self.height)
+            # print("TrumpetNose Width: ", self.width)
+            # print("TrumpetNose Height: ", self.height)
         self.walkPos = 0
         self.direction = "right"
         self.endPosX = start_x + 100
         self.endPosY = start_y
 
+    def setEndPos(self, screenx, screeny):
+        print("Updating TrumpetNose endPosX")
+        self.endPosX = screenx
+        
     def move(self, screen):
         if self.direction == "left":
             self.image = self.trumpetNoseImgLeft[self.walkPos]
@@ -652,7 +741,8 @@ class Willy:
     def stopJumping(self, sound):
         self.walking = False
         self.willyJump = 0
-        sound.stopJumpFallSound()
+        if not self.falling:
+            sound.stopJumpFallSound()
 
     def move(self, events, screen, sound):
         # if events.keysPressed["left"] or events.keysPressed["right"] or events.keysPressed["jump"]:
@@ -802,7 +892,7 @@ def update(player, events, keys, guardians, willy, screen, sound, floors, vegeta
             player.score += key.scorevalue
         elif collision.collidingObject.type == "Floor" and collision.event == "landed" \
              and willy.willyJump <= willy.willyJumpDistance / 2:
-            print("landed")
+            # print("landed")
             willy.stopJumping(sound)
         willy.falling = False
     else:
@@ -817,22 +907,25 @@ F = 0x11 # floor
 P = 0x12 # plant
 V = 0x13 # conveyor
 C = 0x14 # crumbling floor
+T = 0x15 # TrumpetNose start location
+U = 0x16 # TrumpetNose end location
+K = 0x17 # key
 
 centralCavern = [
+    [B,0,0,0,0,0,0,0,0,0,K,0,B,0,0,0,0,B,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,0,0,0,P,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
+    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
+    [B,F,F,F,0,0,0,0,T,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
+    [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
-    [B,0,W,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,0,B,B,B,C,C,C,C,F,F,F,B],
-    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,F,F,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,W,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,F,F,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
     [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
     ]
@@ -850,33 +943,44 @@ def main():
     keys = []
     floors = []
     vegetation = []
-    screen.load(centralCavern)
+    # screen.load(centralCavern)
     scale = 0.7
     for cellx in range(0,32):
         for celly in range(0,16):
             cellContents = centralCavern[celly][cellx]
-            print("handling map: ", cellx, celly, " = ", cellContents)
+            # print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
             if cellContents == B:
                 cellName = "brick" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+                floors.append(Brick(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == F:
                 cellName = "floor" + "-" + str(cellx) + "-" + str(celly)
                 floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == P:
                 cellName = "plant" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+                vegetation.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == V:
                 cellName = "conveyor" + "-" + str(cellx) + "-" + str(celly)
                 floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == C:
                 cellName = "crumble" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+                floors.append(CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == W:
                 cellName = "willy" + "-" + str(cellx) + "-" + str(celly)
-                print("found willy!")
-                # floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
                 willy = Willy(screenx, screeny, screen.scale)
+            elif cellContents == T:
+                cellName = "trumpetnose start" + "-" + str(cellx) + "-" + str(celly)
+                guardians.append(TrumpetNose(screenx, screeny, screen.scale, cellName))
+            elif cellContents == U:
+                for guardian in guardians:
+                    print("Looking for TN: ", guardian.subtype)
+                    if guardian.subtype == "TrumpetNose":
+                        cellName = "trumpetnose end" + "-" + str(cellx) + "-" + str(celly)
+                        guardian.setEndPos(screenx, screeny)
+            elif cellContents == K:
+                cellName = "key" + "-" + str(cellx) + "-" + str(celly)
+                keys.append(Key(screenx, screeny, screen.scale, cellName))
+
     # vegetation.append(Plant(screenx, screeny, screen.scale * 0.7, plantName))
     # floors.append(Floor(100, screen.yboundary_bottom, screen.scale * 0.7, "floor1"))
     # floors.append(Floor(120, screen.yboundary_bottom - 30, screen.scale * 0.7, "floor1"))
@@ -885,12 +989,10 @@ def main():
     # floors.append(Floor(80, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
     # floors.append(Floor(70, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
     # vegetation.append(Plant(120, screen.yboundary_bottom + 20, screen.scale * 0.7, "plant1"))
-    guardians.append(TrumpetNose(trumpetNoseStartX, trumpetNoseStartY, screen.scale))
     # guardians.append(TrumpetNose(100, 1, screen.scale))
     # guardians.append(TrumpetNose(200, 1, screen.scale))
     # guardians.append(TrumpetNose(50, 50, screen.scale))
     # guardians.append(TrumpetNose(1, 50, screen.scale))
-    keys.append(Key(100, 140, screen.scale, "key1"))
     # keys.append(Key(120, 100, screen.scale, "key2"))
     # keys.append(Key(130, 100, screen.scale, "key3"))
     clock = pygame.time.Clock()
