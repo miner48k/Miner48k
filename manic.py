@@ -5,7 +5,14 @@
 # https://www.gamejournal.it/the-sound-of-1-bit-technical-constraint-as-a-driver-for-musical-creativity-on-the-48k-sinclair-zx-spectrum/z
 # D=8*(1+ABS(J-8));
 
-import os, sys, math, re, logging, pdb
+# TODO:
+#  bring in code for Brick as a SolidStandable object again
+#  when hitting the brick try just setting willyJump to the mid-way point and willyWalk or whatever to False
+#  fix up the weird jump lands
+#  conveyors need implenting
+#  fix up the graphics so they don't need scaling
+
+import os, sys, math, re, logging, pdb, time
 # load pygame without getting its hello message
 with open(os.devnull, 'w') as f:
     # disable stdout
@@ -149,6 +156,7 @@ class Sound:
         self.death = pygame.mixer.Sound('death.ogg')
         self.titleTune = pygame.mixer.Sound('titletune.ogg')
         self.jumpFall = pygame.mixer.Sound('jumpfall.ogg')
+        self.fall = pygame.mixer.Sound('fall.ogg')
         self.gameOver = pygame.mixer.Sound('gameover.ogg')
 
     def mainMusicOff(self):
@@ -190,6 +198,12 @@ class Sound:
     def stopJumpFallSound(self):
         self.jumpFall.stop()
 
+    def playFallSound(self):
+        self.fall.play()
+
+    def stopFallSound(self):
+        self.fall.stop()
+
     def playGameOver(self):
         self.gameOver.play()
         self.waitUntilFinished()
@@ -223,6 +237,7 @@ class Screen:
         pygame.display.set_caption('Manic Miner')
         pygame.key.set_repeat(1,10)
         self.BLACK = (0, 0, 0)
+        self.WHITE = (255, 255, 255)
         # define some boundary values
         self.xboundary_left = 5
         self.xboundary_right = self.max_x - 50 # willyImgWidth*2
@@ -231,6 +246,14 @@ class Screen:
         self.collisionCount = 0
         self.cellWidth = self.max_x / 32
         self.cellHeight = self.max_y / 16
+        self.alpha = 255
+        self.RGB = {
+            "yellow":  (189,189,0),
+            "magenta": (189,0,189),
+            "cyan":    (0,189,189),
+            "green":   (0,189,0),
+            "red":     (189,0,0),
+        }
 
     def cellToCoords(self, x, y):
         coord_x = x * self.cellWidth
@@ -242,6 +265,9 @@ class Screen:
         
     def displayBackground(self):
         self.DISPLAYSURF.fill(self.BLACK)
+
+    def flashBackground(self):
+        self.DISPLAYSURF.fill(self.WHITE)
 
     def displayBlocks(self):
         return
@@ -309,7 +335,16 @@ class Screen:
                             willy.ypos = object_top - willy.height
                             return Collision(object, "landed")
                     return Collision(object, "collision")
-        return None       
+        return None
+
+    def colorImage(self, image, color):
+        print("setting to " + color)
+        imageCopy = image.copy()
+        clear = (255, 255, 255, 0)
+        rgb = self.RGB[color] + (0,)
+        imageCopy.fill(clear, None, pygame.BLEND_RGBA_SUB)
+        imageCopy.fill(rgb, None, pygame.BLEND_RGBA_ADD)
+        return imageCopy
 
 class Object:
     def __init__(self, start_x, start_y, name="NoName"):
@@ -321,10 +356,16 @@ class Object:
         self.type = "Object"
         self.name = name
         self.collidable = False
+        self.image = pygame.image.load('empty.png')
 
     def restart(self):
         self.xpos = self.startxpos
         self.ypos = self.startypos
+
+    def setColor(self, screen, color):
+        print("setColor ", self.name, color)
+        self.image = screen.colorImage(self.image, color)
+        return
 
 class MovingObject(Object):
     def __init__(self, start_x, start_y, name="MovingObject"):
@@ -343,6 +384,37 @@ class StationaryObject(Object):
         self.type = "StationaryObject"
         self.collidable = True
 
+class Portal(StationaryObject):
+    def __init__(self, x, y, scale, name="Portal"):
+        StationaryObject.__init__(self, x, y, name)
+        self.type = "Portal"
+        
+        self.portalImg = [
+            pygame.image.load('portal_1.png'), # red
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.portalImg)
+        for count in range(0, numImages):
+            (portalImgWidth, portalImgHeight) = self.portalImg[count].get_rect().size
+            newHeight = int(portalImgHeight * scale)
+            newWidth = int(portalImgWidth * scale)
+            picture = pygame.transform.scale(self.portalImg[count], (newWidth, newHeight))
+            self.portalImg[count] = picture
+            (portalImgWidth,portalImgHeight) = self.portalImg[count].get_rect().size
+            newHeight = int(portalImgHeight * scale)
+            newWidth = int(portalImgWidth * scale)
+            picture = pygame.transform.scale(self.portalImg[count], (newWidth,newHeight))
+            self.portalImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            # print("Portal Width: ", self.width)
+            # print("Portal Height: ", self.height)
+        self.image = self.portalImg[0]
+
+    def display(self, screen):
+        image = self.portalImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        
 class StandableObject(StationaryObject):
     def __init__(self, x, y, name="StandableObject"):
         StationaryObject.__init__(self, x, y, name)
@@ -382,7 +454,7 @@ class Floor(StandableObject):
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class CrumblingFloor(StandableObject):
-    def __init__(self, x, y, scale, name="Floor"):
+    def __init__(self, x, y, scale, name="CrumblingFloor"):
         print("Creating CrumblingFloor: ", name)
         StandableObject.__init__(self, x, y, name)
         self.type = "CrumblingFloor"
@@ -390,7 +462,13 @@ class CrumblingFloor(StandableObject):
         # sprite
         self.floorImg = [
             pygame.image.load('crumble_1.png'),
-            # TODO: the rest of the crumbling floor animation here
+            pygame.image.load('crumble_2.png'),
+            pygame.image.load('crumble_3.png'),
+            pygame.image.load('crumble_4.png'),
+            pygame.image.load('crumble_5.png'),
+            pygame.image.load('crumble_6.png'),
+            pygame.image.load('crumble_7.png'),
+            pygame.image.load('crumble_8.png'),
         ]
         # scale the sprites up to larger
         numImages = len(self.floorImg)
@@ -409,11 +487,25 @@ class CrumblingFloor(StandableObject):
             self.height = newHeight
             # print("Floor Width: ", self.width)
             # print("Floor Height: ", self.height)
-        self.image = self.floorImg[0]
+        self.crumbleLevel = 0
+        self.image = self.floorImg[self.crumbleLevel]
 
+    def crumble(self):
+        if self.crumbleLevel == 0:
+            self.crumbleLevel += 2
+        else:
+            self.crumbleLevel += 1
+
+    def isStandable(self):
+        standable = (self.crumbleLevel < 8)
+        print("isStandable: ", standable, "(", self.crumbleLevel, ")")
+        return standable
+            
     def display(self, screen):
-        image = self.floorImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        if self.crumbleLevel < 8:
+            image = self.floorImg[self.crumbleLevel]
+            screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        # otherwise just don't show anything
 
 class Brick(StandableObject):
     def __init__(self, x, y, scale, name="Brick"):
@@ -544,7 +636,6 @@ class Guardian(MovingObject):
         self.ypos = start_y
         self.startxpos = start_x
         self.startypos = start_y
-        self.image = pygame.image.load('cat.png')
         (self.width, self.height) = self.image.get_rect().size
         self.direction = "right"
         self.collidable = True
@@ -591,7 +682,7 @@ class TrumpetNose(Guardian):
             (trumpetNoseImgWidth, trumpetNoseImgHeight) = self.trumpetNoseImgRight[count].get_rect().size
             newHeight = int(trumpetNoseImgHeight * willyScale)
             newWidth = int(trumpetNoseImgWidth * willyScale)
-            picture = pygame.transform.scale(self.trumpetNoseImgRight[count], (newWidth, newHeight))
+            picture = pygame.transform.scale(self.trumpetNoseImgRight[count], (newWidth, newHeight))            
             self.trumpetNoseImgRight[count] = picture
             (trumpetNoseImgWidth,trumpetNoseImgHeight) = self.trumpetNoseImgLeft[count].get_rect().size
             newHeight = int(trumpetNoseImgHeight * willyScale)
@@ -636,9 +727,10 @@ class Player:
         self.score = 0
         self.lives = 3
         
-class Willy:
+class Willy(MovingObject):
     def __init__(self, start_x, start_y, scale):
         print("Creating Willy at ", start_x, start_y)
+        MovingObject.__init__(self, start_x, start_y, "Willy")
         # motion distances
         self.xdistance = 4              # how far left and right motion moves Willy
         self.ydistance = 5              # how far jumping motion moves Willy on the y axis
@@ -658,6 +750,7 @@ class Willy:
         self.testMode = False
         self.test = Test()
         self.falling = False
+        self.fallDistance = 0
 
         # moving left animation sprites
         self.willyImgLeft = [
@@ -744,6 +837,9 @@ class Willy:
         if not self.falling:
             sound.stopJumpFallSound()
 
+    def stopFalling(self, sound):
+        sound.stopFallSound()
+
     def move(self, events, screen, sound):
         # if events.keysPressed["left"] or events.keysPressed["right"] or events.keysPressed["jump"]:
         #     print("Keys: ", end='', flush=True)
@@ -778,7 +874,10 @@ class Willy:
 
         # are we falling?
         if self.falling == True:
-            print("falling")
+            if (self.fallDistance == 0):
+                sound.playFallSound()
+            self.fallDistance += 1
+            print("falling: ", self.fallDistance)
             self.ypos += 8
             # don't handle any more keys
             return
@@ -836,21 +935,23 @@ class Willy:
             self.walking = False
         else:
             self.walking = False
+        if self.direction == "left":
+            self.image = self.willyImgLeft[self.willyWalk]
+        else:
+            self.image = self.willyImgRight[self.willyWalk]
         return
     
     def display(self, screen):
-        if self.direction == "left":
-            screen.DISPLAYSURF.blit(self.willyImgLeft[self.willyWalk], (self.xpos, self.ypos))
-        else:
-            screen.DISPLAYSURF.blit(self.willyImgRight[self.willyWalk], (self.xpos, self.ypos))
+        screen.DISPLAYSURF.blit(self.image, (self.xpos, self.ypos))
 
     def restart(self):
         self.willyJump = 0
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
-def loseLifeAndRestart(events, player, keys, guardians, willy, sound):
+def loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound):
     sound.pauseMainMusic()
+    sound.playDeathSound()
     for guardian in guardians:
         guardian.restart()
     for key in keys:
@@ -860,10 +961,10 @@ def loseLifeAndRestart(events, player, keys, guardians, willy, sound):
     player.lives -= 1
     # flash screen
     # play death sound
-    sound.playDeathSound()
     sound.playMainMusic()
+    screen.flashBackground()
 
-def update(player, events, keys, guardians, willy, screen, sound, floors, vegetation):
+def update(clock, player, events, keys, guardians, willy, screen, sound, floors, vegetation, portal):
     if events.keysPressed["music"]:
         print("toggle music")
         sound.toggleMainMusic()
@@ -882,23 +983,47 @@ def update(player, events, keys, guardians, willy, screen, sound, floors, vegeta
         key.display(screen)
     collision = screen.checkCollisions(willy, keys + guardians + floors + vegetation)
     freezeWilly = False
+    reallyLanded = False # for now - to be determined below
     if collision is not None:
         if collision.collidingObject.type == "Guardian" or collision.collidingObject.type == "Plant":
-            loseLifeAndRestart(events, player, keys, guardians, willy, sound)
+            loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
         elif collision.collidingObject.type == "Key":
             print("collided with ", collision.collidingObject.name)
             collision.collidingObject.disappear()
             # pdb.set_trace()
             player.score += key.scorevalue
-        elif collision.collidingObject.type == "Floor" and collision.event == "landed" \
+        elif isinstance(collision.collidingObject, StandableObject) \
+             and collision.event == "landed" \
              and willy.willyJump <= willy.willyJumpDistance / 2:
-            # print("landed")
-            willy.stopJumping(sound)
-        willy.falling = False
+            floor = collision.collidingObject
+            if isinstance(floor, CrumblingFloor):
+                print("landed on crumble")
+                floor.crumble()
+                if floor.isStandable():
+                    print("floor is standable")
+                    reallyLanded = True
+                else:
+                    willy.falling = True
+            else:
+                print("landed on floor")
+                reallyLanded = True
+            if reallyLanded:
+                print("really landed")
+                willy.stopJumping(sound)
+                willy.stopFalling(sound)
+                willy.falling = False
+                if willy.fallDistance > 8:
+                    loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
+                # either way, reset the fall distance
+                willy.fallDistance = 0
+        if reallyLanded == True:
+            willy.falling = False
     else:
        willy.falling = True     
     willy.move(events, screen, sound)
     willy.display(screen)
+    for portal_part in portal:
+        portal_part.display(screen)
     pygame.display.update()
 
 W = 0x01 # willy start location
@@ -910,6 +1035,7 @@ C = 0x14 # crumbling floor
 T = 0x15 # TrumpetNose start location
 U = 0x16 # TrumpetNose end location
 K = 0x17 # key
+Z = 0x18 # portal
 
 centralCavern = [
     [B,0,0,0,0,0,0,0,0,0,K,0,B,0,0,0,0,B,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
@@ -925,8 +1051,8 @@ centralCavern = [
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,W,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
-    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
     [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
     ]
     
@@ -943,6 +1069,7 @@ def main():
     keys = []
     floors = []
     vegetation = []
+    portal = [] # actually made of 4 portal objects
     # screen.load(centralCavern)
     scale = 0.7
     for cellx in range(0,32):
@@ -980,21 +1107,10 @@ def main():
             elif cellContents == K:
                 cellName = "key" + "-" + str(cellx) + "-" + str(celly)
                 keys.append(Key(screenx, screeny, screen.scale, cellName))
+            elif cellContents == Z:
+                cellName = "portal" + "-" + str(cellx) + "-" + str(celly)
+                portal.append(Portal(screenx, screeny, screen.scale * 0.7, cellName))
 
-    # vegetation.append(Plant(screenx, screeny, screen.scale * 0.7, plantName))
-    # floors.append(Floor(100, screen.yboundary_bottom, screen.scale * 0.7, "floor1"))
-    # floors.append(Floor(120, screen.yboundary_bottom - 30, screen.scale * 0.7, "floor1"))
-    # floors.append(Floor(140, screen.yboundary_bottom - 60, screen.scale * 0.7, "floor1"))
-    # floors.append(Floor(90, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
-    # floors.append(Floor(80, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
-    # floors.append(Floor(70, screen.yboundary_bottom + 40, screen.scale * 0.7, "floor1"))
-    # vegetation.append(Plant(120, screen.yboundary_bottom + 20, screen.scale * 0.7, "plant1"))
-    # guardians.append(TrumpetNose(100, 1, screen.scale))
-    # guardians.append(TrumpetNose(200, 1, screen.scale))
-    # guardians.append(TrumpetNose(50, 50, screen.scale))
-    # guardians.append(TrumpetNose(1, 50, screen.scale))
-    # keys.append(Key(120, 100, screen.scale, "key2"))
-    # keys.append(Key(130, 100, screen.scale, "key3"))
     clock = pygame.time.Clock()
     sound.startMainMusic()
 
@@ -1006,7 +1122,7 @@ def main():
 
     while running and player.lives > 0:
         running = events.check()
-        update(player, events, keys, guardians, willy, screen, sound, floors, vegetation)
+        update(clock, player, events, keys, guardians, willy, screen, sound, floors, vegetation, portal)
         clock.tick(screen.FPS)
     if player.lives == 0:
         sound.stopAll()
