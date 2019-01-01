@@ -215,6 +215,7 @@ class Sound:
     def stopAll(self):
         self.titleTune.stop()
         self.jumpFall.stop()
+        self.fall.stop()
         pygame.mixer.music.stop()
 
 class Collision:
@@ -299,7 +300,8 @@ class Screen:
         # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
 
-        collisionWatchList = ["floor-1-7"]
+        collisionWatchList = ["floor-10-11", "floor-11-11", "floor-12-11", "floor-2-9"]
+        collisions = []
 
         for object in objects:
             if object.collidable == True:
@@ -323,19 +325,21 @@ class Screen:
                 if horizontal == True and vertical == True:
                     collision = True
                 if collision == True:
-                    if object.name in collisionWatchList:
-                        print("collision #", self.collisionCount, " with ", object.name, " of type ", type(object), " at ", object.xpos, object.ypos)
                     self.collisionCount += 1
                     if isinstance(object, StandableObject) and object.standable == True:
-                        # print("willy_bottom: ", willy_bottom)
-                        # print("object_top: ", object_top)
-                        if round(willy_bottom) >= object_top and round(willy_bottom) <= object_top + 5:
+                        if object.name in collisionWatchList:
+                            print("willy  (L,R,T,B): ", willy_left, willy_right, willy_top, willy_bottom)
+                            print("object (L,R,T,B): ", object_left, object_right, object_top, object_bottom)
+                            print("WB (", willy_bottom, ") needs to be in range ", object_top - 5, " to ", object_top + 5)
+                        if (willy.falling or willy.willyJump <= willy.willyJumpDistance / 2) \
+                           and willy_bottom >= object_top and willy_bottom <= object_top + 10:
                             # print("touched top of floor")
                             # print("setting ypos to ", object_top)
                             willy.ypos = object_top - willy.height
-                            return Collision(object, "landed")
-                    return Collision(object, "collision")
-        return None
+                            collisions.append(Collision(object, "landed"))
+                            continue
+                    collisions.append(Collision(object, "collision"))
+        return collisions
 
     def colorImage(self, image, color):
         print("setting to " + color)
@@ -449,6 +453,9 @@ class Floor(StandableObject):
             # print("Floor Height: ", self.height)
         self.image = self.floorImg[0]
 
+    def restart(self):
+        pass
+
     def display(self, screen):
         image = self.floorImg[0]
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
@@ -500,7 +507,10 @@ class CrumblingFloor(StandableObject):
         standable = (self.crumbleLevel < 8)
         print("isStandable: ", standable, "(", self.crumbleLevel, ")")
         return standable
-            
+
+    def restart(self):
+        self.crumbleLevel = 0
+
     def display(self, screen):
         if self.crumbleLevel < 8:
             image = self.floorImg[self.crumbleLevel]
@@ -875,6 +885,7 @@ class Willy(MovingObject):
         # are we falling?
         if self.falling == True:
             if (self.fallDistance == 0):
+                sound.stopJumpFallSound()
                 sound.playFallSound()
             self.fallDistance += 1
             print("falling: ", self.fallDistance)
@@ -954,6 +965,8 @@ def loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, 
     sound.playDeathSound()
     for guardian in guardians:
         guardian.restart()
+    for floor in floors:
+        floor.restart()
     for key in keys:
         key.restart()
     willy.restart()
@@ -981,10 +994,10 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     for key in keys:
         key.move(screen)
         key.display(screen)
-    collision = screen.checkCollisions(willy, keys + guardians + floors + vegetation)
+    collisions = screen.checkCollisions(willy, keys + guardians + floors + vegetation)
     freezeWilly = False
     reallyLanded = False # for now - to be determined below
-    if collision is not None:
+    for collision in collisions:
         if collision.collidingObject.type == "Guardian" or collision.collidingObject.type == "Plant":
             loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
         elif collision.collidingObject.type == "Key":
@@ -1005,19 +1018,18 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
                 else:
                     willy.falling = True
             else:
-                print("landed on floor")
+                # print("landed on floor")
                 reallyLanded = True
-            if reallyLanded:
-                print("really landed")
-                willy.stopJumping(sound)
-                willy.stopFalling(sound)
-                willy.falling = False
-                if willy.fallDistance > 8:
-                    loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
-                # either way, reset the fall distance
-                willy.fallDistance = 0
-        if reallyLanded == True:
-            willy.falling = False
+    if reallyLanded == True:
+        willy.falling = False
+        # print("really landed")
+        willy.stopJumping(sound)
+        willy.stopFalling(sound)
+        willy.falling = False
+        if willy.fallDistance > 10:
+            loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
+        # either way, reset the fall distance
+        willy.fallDistance = 0
     else:
        willy.falling = True     
     willy.move(events, screen, sound)
@@ -1043,9 +1055,28 @@ centralCavern = [
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
-    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,C,C,C,C,F,C,C,C,C,F,F,F,F,F,F,F,F,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
     [B,F,F,F,0,0,0,0,T,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
+    [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+    [B,0,W,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    ]
+
+testCavern1 = [
+    [B,0,0,0,0,0,0,0,0,0,K,0,B,0,0,0,0,B,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
+    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
+    [B,F,F,F,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
     [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
@@ -1055,16 +1086,30 @@ centralCavern = [
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
     [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
     ]
-    
+testCavern2 = [
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,F,F,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,B,B,B,B,B,B,B,B,B,F,F,F,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    ]
+
 def main():
     events = Events()
     screen = Screen(640,320)
     player = Player()
     sound = Sound()
-    willyStartX = 97 # screen.xboundary_left
-    willyStartY = 237 # screen.yboundary_bottom
-    trumpetNoseStartX = screen.xboundary_right - 410
-    trumpetNoseStartY = screen.yboundary_bottom - 108
     guardians = []
     keys = []
     floors = []
@@ -1072,9 +1117,12 @@ def main():
     portal = [] # actually made of 4 portal objects
     # screen.load(centralCavern)
     scale = 0.7
+    # cavern = testCavern1
+    # cavern = testCavern2
+    cavern = centralCavern
     for cellx in range(0,32):
         for celly in range(0,16):
-            cellContents = centralCavern[celly][cellx]
+            cellContents = cavern[celly][cellx]
             # print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
             if cellContents == B:
@@ -1094,6 +1142,7 @@ def main():
                 floors.append(CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == W:
                 cellName = "willy" + "-" + str(cellx) + "-" + str(celly)
+                screeny -= 10
                 willy = Willy(screenx, screeny, screen.scale)
             elif cellContents == T:
                 cellName = "trumpetnose start" + "-" + str(cellx) + "-" + str(celly)
