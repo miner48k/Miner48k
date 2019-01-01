@@ -159,12 +159,6 @@ class Sound:
         self.fall = pygame.mixer.Sound('fall.ogg')
         self.gameOver = pygame.mixer.Sound('gameover.ogg')
 
-    def mainMusicOff(self):
-        self.playMusic = False
-
-    def mainMusicOn(self):
-        self.playMusic = True
-
     def toggleMainMusic(self):
         print("self.playMusic before: ", self.playMusic)
         self.playMusic = not self.playMusic
@@ -333,8 +327,6 @@ class Screen:
                             print("WB (", willy_bottom, ") needs to be in range ", object_top - 5, " to ", object_top + 5)
                         if (willy.falling or willy.willyJump <= willy.willyJumpDistance / 2) \
                            and willy_bottom >= object_top and willy_bottom <= object_top + 10:
-                            # print("touched top of floor")
-                            # print("setting ypos to ", object_top)
                             willy.ypos = object_top - willy.height
                             collisions.append(Collision(object, "landed"))
                             continue
@@ -394,7 +386,8 @@ class Portal(StationaryObject):
         self.type = "Portal"
         
         self.portalImg = [
-            pygame.image.load('portal_1.png'), # red
+            pygame.image.load('portal_start.png'),
+            pygame.image.load('portal_end.png'),
         ]
         # scale the sprites up to larger
         numImages = len(self.portalImg)
@@ -413,11 +406,28 @@ class Portal(StationaryObject):
             self.height = newHeight
             # print("Portal Width: ", self.width)
             # print("Portal Height: ", self.height)
-        self.image = self.portalImg[0]
+        self.displayCount = 0
+        self.imageNum = 0
+        self.image = self.portalImg[self.imageNum]
+        self.open = False
+        self.collidable = True
+
+    def move(self, screen):
+        if self.open:
+            self.displayCount += 1
+            if self.displayCount <= 5:
+                self.imageNum = 0
+            else:
+                self.imageNum = 1
+            self.image = self.portalImg[self.imageNum]
+            if self.displayCount == 10:
+                self.displayCount = 0
+
+    def restart(self):
+        self.open = False
 
     def display(self, screen):
-        image = self.portalImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
         
 class StandableObject(StationaryObject):
     def __init__(self, x, y, name="StandableObject"):
@@ -502,20 +512,39 @@ class CrumblingFloor(StandableObject):
             self.crumbleLevel += 2
         else:
             self.crumbleLevel += 1
-
-    def isStandable(self):
-        standable = (self.crumbleLevel < 8)
-        print("isStandable: ", standable, "(", self.crumbleLevel, ")")
-        return standable
+        if self.crumbleLevel == 8:
+            self.standable = False
 
     def restart(self):
         self.crumbleLevel = 0
+        self.standable = True
 
     def display(self, screen):
         if self.crumbleLevel < 8:
             image = self.floorImg[self.crumbleLevel]
             screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
         # otherwise just don't show anything
+
+class Ice(StationaryObject):
+    def __init__(self, x, y, scale, name="Ice"):
+        print("Creating Ice: ", name)
+        StationaryObject.__init__(self, x, y, name)
+        self.type = "Ice"
+        # sprite
+        self.image = pygame.image.load('icicle.png')
+        # scale the sprites up to larger
+        (iceImgWidth, iceImgHeight) = self.image.get_rect().size
+        newHeight = int(iceImgHeight * scale)
+        newWidth = int(iceImgWidth * scale)
+        picture = pygame.transform.scale(self.image, (newWidth, newHeight))
+        self.image = picture
+        self.width = newWidth
+        self.height = newHeight
+        # print("Ice Width: ", self.width)
+        # print("Ice Height: ", self.height)
+
+    def display(self, screen):
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
 
 class Brick(StandableObject):
     def __init__(self, x, y, scale, name="Brick"):
@@ -851,18 +880,6 @@ class Willy(MovingObject):
         sound.stopFallSound()
 
     def move(self, events, screen, sound):
-        # if events.keysPressed["left"] or events.keysPressed["right"] or events.keysPressed["jump"]:
-        #     print("Keys: ", end='', flush=True)
-        #     if events.keysPressed["left"]:
-        #         print("L,",end='', flush=True)
-        #     if events.keysPressed["right"]:
-        #         print("R,",end='', flush=True)
-        #     if events.keysPressed["jump"]:
-        #         print("J",end='', flush=True)
-        #     print()
-        # else:
-        #     print("No keys pressed")
-        
         if events.keysPressed["dev1"]:
             self.xpos = self.willystartx
             self.ypos = self.willystarty
@@ -879,18 +896,21 @@ class Willy(MovingObject):
             # already jumping
             self.jump(screen, sound)
             self.willyJump -= 1
+            self.animateWalk()
             # don't handle any more keys
             return
 
         # are we falling?
         if self.falling == True:
+            # pdb.set_trace()
             if (self.fallDistance == 0):
                 sound.stopJumpFallSound()
                 sound.playFallSound()
             self.fallDistance += 1
             print("falling: ", self.fallDistance)
             self.ypos += 8
-            # don't handle any more keys
+            self.animateWalk()
+            # don't handle any more keyboard entries
             return
 
         # play the next test move
@@ -899,12 +919,10 @@ class Willy(MovingObject):
 
         if self.testMode:
             moves = self.test.getNextMove()
-            # print("testKeys: ", end='')
             for move in moves:
                 # print(move, ", ", end='', flush=True)
                 if move != "none":
                     events.keysPressed[move] = True
-            # print()
 
         # move in response to direction
         if events.keysPressed["left"]:
@@ -946,12 +964,19 @@ class Willy(MovingObject):
             self.walking = False
         else:
             self.walking = False
+        self.animateWalk()
+        # if self.direction == "left":
+        #     self.image = self.willyImgLeft[self.willyWalk]
+        # else:
+        #     self.image = self.willyImgRight[self.willyWalk]
+        # return
+
+    def animateWalk(self):
         if self.direction == "left":
             self.image = self.willyImgLeft[self.willyWalk]
         else:
             self.image = self.willyImgRight[self.willyWalk]
-        return
-    
+
     def display(self, screen):
         screen.DISPLAYSURF.blit(self.image, (self.xpos, self.ypos))
 
@@ -960,7 +985,7 @@ class Willy(MovingObject):
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
-def loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound):
+def loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal):
     sound.pauseMainMusic()
     sound.playDeathSound()
     for guardian in guardians:
@@ -969,6 +994,8 @@ def loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, 
         floor.restart()
     for key in keys:
         key.restart()
+    for portal_piece in portal:
+        portal_piece.restart()
     willy.restart()
     sound.stopJumpFallSound()
     player.lives -= 1
@@ -977,7 +1004,11 @@ def loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, 
     sound.playMainMusic()
     screen.flashBackground()
 
-def update(clock, player, events, keys, guardians, willy, screen, sound, floors, vegetation, portal):
+def win():
+    print("You have won!")
+    sys.exit(0)
+
+def update(clock, player, events, keys, guardians, willy, screen, sound, floors, obstacles, portal):
     if events.keysPressed["music"]:
         print("toggle music")
         sound.toggleMainMusic()
@@ -985,8 +1016,8 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     for floor in floors:
         floor.display(screen)
     screen.displayBlocks()
-    for plant in vegetation:
-        plant.display(screen)
+    for obstacle in obstacles:
+        obstacle.display(screen)
     screen.displayConveyors()
     for guardian in guardians:
         guardian.move(screen)
@@ -994,63 +1025,75 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     for key in keys:
         key.move(screen)
         key.display(screen)
-    collisions = screen.checkCollisions(willy, keys + guardians + floors + vegetation)
+    collisions = screen.checkCollisions(willy, keys + guardians + floors + obstacles + portal)
     freezeWilly = False
     reallyLanded = False # for now - to be determined below
     for collision in collisions:
+        # print("Collision with ", collision.collidingObject.type)
         if collision.collidingObject.type == "Guardian" or collision.collidingObject.type == "Plant":
-            loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
+            loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
         elif collision.collidingObject.type == "Key":
             print("collided with ", collision.collidingObject.name)
             collision.collidingObject.disappear()
-            # pdb.set_trace()
             player.score += key.scorevalue
         elif isinstance(collision.collidingObject, StandableObject) \
              and collision.event == "landed" \
              and willy.willyJump <= willy.willyJumpDistance / 2:
             floor = collision.collidingObject
             if isinstance(floor, CrumblingFloor):
-                print("landed on crumble")
+                print("touching crumble")
                 floor.crumble()
-                if floor.isStandable():
+                if floor.standable == True:
                     print("floor is standable")
                     reallyLanded = True
                 else:
-                    willy.falling = True
+                    print("floor is not standable")
+                    reallyLanded = False
             else:
                 # print("landed on floor")
                 reallyLanded = True
+        elif isinstance(collision.collidingObject, Portal):
+            portal_piece = collision.collidingObject
+            if portal_piece.open:
+                win()
     if reallyLanded == True:
         willy.falling = False
-        # print("really landed")
         willy.stopJumping(sound)
         willy.stopFalling(sound)
         willy.falling = False
         if willy.fallDistance > 10:
-            loseLifeAndRestart(clock, screen, events, player, keys, floors, vegetation, guardians, willy, sound)
+            loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
         # either way, reset the fall distance
         willy.fallDistance = 0
     else:
-       willy.falling = True     
+       willy.falling = True
     willy.move(events, screen, sound)
     willy.display(screen)
+    allKeysFound = True
+    for key in keys:
+        if key.appears:
+            allKeysFound = False
     for portal_part in portal:
+        if allKeysFound:
+            portal_part.open = True
+        portal_part.move(screen)
         portal_part.display(screen)
     pygame.display.update()
 
-W = 0x01 # willy start location
-B = 0x10 # brick
-F = 0x11 # floor
-P = 0x12 # plant
-V = 0x13 # conveyor
-C = 0x14 # crumbling floor
-T = 0x15 # TrumpetNose start location
-U = 0x16 # TrumpetNose end location
-K = 0x17 # key
+B = 0x02 # brick
+C = 0x03 # crumbling floor
+F = 0x06 # floor
+I = 0x09 # ice
+K = 0x0A # key
+P = 0x10 # plant
+T = 0x14 # TrumpetNose start location
+U = 0x15 # TrumpetNose end location
+V = 0x16 # conveyor
+W = 0x17 # willy start location
 Z = 0x18 # portal
 
 centralCavern = [
-    [B,0,0,0,0,0,0,0,0,0,K,0,B,0,0,0,0,B,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
+    [B,0,0,0,0,0,0,0,0,0,K,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
@@ -1069,19 +1112,19 @@ centralCavern = [
     ]
 
 testCavern1 = [
-    [B,0,0,0,0,0,0,0,0,0,K,0,B,0,0,0,0,B,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,P,0,0,B],
     [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
-    [B,F,F,F,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    [B,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
     [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,W,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+    [B,0,W,0,0,K,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
     [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
     [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
     [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
@@ -1113,7 +1156,7 @@ def main():
     guardians = []
     keys = []
     floors = []
-    vegetation = []
+    obstacles = []
     portal = [] # actually made of 4 portal objects
     # screen.load(centralCavern)
     scale = 0.7
@@ -1131,9 +1174,12 @@ def main():
             elif cellContents == F:
                 cellName = "floor" + "-" + str(cellx) + "-" + str(celly)
                 floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+            elif cellContents == I:
+                cellName = "ice" + "-" + str(cellx) + "-" + str(celly)
+                obstacles.append(Ice(screenx, screeny, screen.scale, cellName))
             elif cellContents == P:
                 cellName = "plant" + "-" + str(cellx) + "-" + str(celly)
-                vegetation.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
+                obstacles.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == V:
                 cellName = "conveyor" + "-" + str(cellx) + "-" + str(celly)
                 floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
@@ -1171,7 +1217,7 @@ def main():
 
     while running and player.lives > 0:
         running = events.check()
-        update(clock, player, events, keys, guardians, willy, screen, sound, floors, vegetation, portal)
+        update(clock, player, events, keys, guardians, willy, screen, sound, floors, obstacles, portal)
         clock.tick(screen.FPS)
     if player.lives == 0:
         sound.stopAll()
