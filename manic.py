@@ -304,7 +304,7 @@ class Screen:
                 # print("          (", object_left, ",", object_top, ") to (", object_right, ",", object_bottom, ")")
                 if willy_right - 1 >= object_left and willy_right <= object_right:
                     horizontal = True
-                if willy_left <= object_right and willy_left >= object_left:
+                if willy_left <= object_right and willy_left >= object_left - 5:
                     horizontal = True
                 if willy_bottom >= object_top and willy_bottom <= object_bottom:
                     vertical = True
@@ -348,6 +348,9 @@ class Object:
         self.collidable = False
         self.image = pygame.image.load('empty.png')
 
+    def move(self, screen):
+        self
+
     def restart(self):
         self.xpos = self.startxpos
         self.ypos = self.startypos
@@ -357,6 +360,9 @@ class Object:
         self.image = screen.colorImage(self.image, color)
         return
 
+    def display(self, screen):
+        pass
+    
 class MovingObject(Object):
     def __init__(self, start_x, start_y, name="MovingObject"):
         # print("Creating MovingObject: ", name)
@@ -466,13 +472,20 @@ class Floor(StandableObject):
 
 class Conveyor(StandableObject):
     def __init__(self, x, y, scale, name="Conveyor"):
-        print("Creating Conveyor: ", name)
         StandableObject.__init__(self, x, y, name)
-        self.type = "Conveyor"
-        # print("x,y = ", self.xpos, ",", self.ypos)
+        print("x: ", x, ", y: ", y, ", scale: ", scale, ", name: ", name)
+        self.conveyorDirection = "none"
+        self.conveyorPosition = 0
         # sprite
         self.conveyorImg = [
             pygame.image.load('conveyor_1.png'),
+            pygame.image.load('conveyor_2.png'),
+            pygame.image.load('conveyor_3.png'),
+            pygame.image.load('conveyor_4.png'),
+            pygame.image.load('conveyor_5.png'),
+            pygame.image.load('conveyor_6.png'),
+            pygame.image.load('conveyor_7.png'),
+            pygame.image.load('conveyor_8.png'),
         ]
         # scale the sprites up to larger
         numImages = len(self.conveyorImg)
@@ -492,8 +505,33 @@ class Conveyor(StandableObject):
         pass
 
     def display(self, screen):
-        image = self.conveyorImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
+        
+class LeftConveyor(Conveyor):
+    def __init__(self, x, y, scale, name="Conveyor"):
+        print("Creating LeftConveyor: ", name)
+        Conveyor.__init__(self, x, y, scale, name)
+        self.type = "LeftConveyor"
+        self.conveyorDirection = "left"
+
+    def move(self, screen):
+        self.conveyorPosition += 1
+        if self.conveyorPosition == len(self.conveyorImg):
+            self.conveyorPosition = 0
+        self.image = self.conveyorImg[self.conveyorPosition]
+
+class RightConveyor(Conveyor):
+    def __init__(self, x, y, scale, name="Conveyor"):
+        print("Creating RightConveyor: ", name)
+        Conveyor.__init__(self, x, y, scale, name)
+        self.type = "LeftConveyor"
+        self.conveyorDirection = "right"
+
+    def move(self, screen):
+        self.conveyorPosition -= 1
+        if self.conveyorPosition < 0:
+            self.conveyorPosition = len(self.conveyorImg)
+        self.image = self.conveyorImg[self.conveyorPosition]
 
 class CrumblingFloor(StandableObject):
     def __init__(self, x, y, scale, name="CrumblingFloor"):
@@ -815,6 +853,7 @@ class Willy(MovingObject):
         self.test = Test()
         self.falling = False
         self.fallDistance = 0
+        self.conveyorDirection = "none"
 
         # moving left animation sprites
         self.willyImgLeft = [
@@ -904,6 +943,26 @@ class Willy(MovingObject):
     def stopFalling(self, sound):
         sound.stopFallSound()
 
+    def walk(self, walkDirection, screen, distance=-1):
+        if distance == -1:
+            distance = self.xdistance
+        if walkDirection == "left":
+            # print("*** walk left")
+            self.direction = "left"
+            if self.xpos > screen.xboundary_left:
+                self.xpos -= distance
+                self.willyWalk += 1            
+                if self.willyWalk == len(self.willyImgLeft):
+                    self.willyWalk = 0
+        elif walkDirection == "right":
+            self.direction = "right"
+            if self.xpos < screen.xboundary_right:
+                # print("walking right")
+                self.xpos += distance
+                self.willyWalk += 1
+                if self.willyWalk == len(self.willyImgRight):
+                    self.willyWalk = 0
+
     def move(self, events, screen, sound):
         if events.keysPressed["dev1"]:
             self.xpos = self.willystartx
@@ -950,22 +1009,19 @@ class Willy(MovingObject):
                     events.keysPressed[move] = True
 
         # move in response to direction
-        if events.keysPressed["left"]:
+        if (events.keysPressed["left"] and self.conveyorDirection == "none") \
+           or (events.keysPressed["jump"] and self.conveyorDirection == "left"):
             if events.keysPressed["jump"]:
                 # print("*** jump left")
                 sound.playJumpFallSound()
                 self.willyJump = self.willyJumpDistance;
                 self.direction = "left"
                 self.walking = True
-            else:
+            elif self.conveyorDirection == "none":
                 # print("*** walk left")
-                self.direction = "left"
-                if self.xpos > screen.xboundary_left:
-                    self.xpos -= self.xdistance
-                    self.willyWalk += 1            
-                    if self.willyWalk == len(self.willyImgLeft):
-                        self.willyWalk = 0
-        elif events.keysPressed["right"]:
+                self.walk("left", screen)
+        elif (events.keysPressed["right"] and self.conveyorDirection == "none") \
+             or (events.keysPressed["jump"] and self.conveyorDirection == "right"):
             # print("*** handling right key")
             if events.keysPressed["jump"]:
                 # print("*** jump right")
@@ -973,15 +1029,9 @@ class Willy(MovingObject):
                 self.willyJump = self.willyJumpDistance;
                 self.direction = "right"
                 self.walking = True
-            else:
+            elif self.conveyorDirection == "none":
                 # print("*** walk right")
-                self.direction = "right"
-                if self.xpos < screen.xboundary_right:
-                    # print("walking right")
-                    self.xpos += self.xdistance
-                    self.willyWalk += 1
-                    if self.willyWalk == len(self.willyImgRight):
-                        self.willyWalk = 0
+                self.walk("right", screen)
         elif events.keysPressed["jump"]:
             # print("*** jump in place")
             sound.playJumpFallSound()
@@ -990,11 +1040,6 @@ class Willy(MovingObject):
         else:
             self.walking = False
         self.animateWalk()
-        # if self.direction == "left":
-        #     self.image = self.willyImgLeft[self.willyWalk]
-        # else:
-        #     self.image = self.willyImgRight[self.willyWalk]
-        # return
 
     def animateWalk(self):
         if self.direction == "left":
@@ -1039,6 +1084,7 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
         sound.toggleMainMusic()
     screen.displayBackground()
     for floor in floors:
+        floor.move(screen)
         floor.display(screen)
     for obstacle in obstacles:
         obstacle.display(screen)
@@ -1052,31 +1098,43 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     freezeWilly = False
     reallyLanded = False # for now - to be determined below
     for collision in collisions:
-        # print("Collision with ", collision.collidingObject.type)
-        if collision.collidingObject.type == "Guardian" or collision.collidingObject.type == "Plant":
+        objectHit = collision.collidingObject
+        # print("Collision with ", objectHit.type)
+        if objectHit.type == "Guardian" or objectHit.type == "Plant":
             loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
-        elif collision.collidingObject.type == "Key":
-            print("collided with ", collision.collidingObject.name)
-            collision.collidingObject.disappear()
+        elif objectHit.type == "Key":
+            print("collided with ", objectHit.name)
+            objectHit.disappear()
             player.score += key.scorevalue
-        elif isinstance(collision.collidingObject, StandableObject) \
+        # object can be stood on,
+        # and Willy landed on top of that object,
+        # and Willy is on the descent part of a jump or falling
+        elif isinstance(objectHit, StandableObject) \
              and collision.event == "landed" \
              and willy.willyJump <= willy.willyJumpDistance / 2:
-            floor = collision.collidingObject
-            if isinstance(floor, CrumblingFloor):
+            floor = objectHit
+            if isinstance(floor, CrumblingFloor): # it's a crumbling floor...
                 print("touching crumble")
                 floor.crumble()
                 if floor.standable == True:
                     print("floor is standable")
-                    reallyLanded = True
+                    reallyLanded = True           # ...and is still at least partially intact
                 else:
                     print("floor is not standable")
-                    reallyLanded = False
+                    reallyLanded = False          # ...but has fully crumbled so can no longer be landed on
+                willy.conveyorDirection = "none"
+            elif isinstance(objectHit, Conveyor):
+                print("conveyor")
+                willy.walkDirection = "left"
+                willy.conveyorDirection = objectHit.conveyorDirection
+                willy.walk(objectHit.conveyorDirection, screen, willy.xdistance / 2)
+                reallyLanded = True
             else:
                 # print("landed on floor")
-                reallyLanded = True
-        elif isinstance(collision.collidingObject, Portal):
-            portal_piece = collision.collidingObject
+                reallyLanded = True               # generic, non-crumbling floor - we can land on this
+                willy.conveyorDirection = "none"
+        elif isinstance(objectHit, Portal): # handle walking into the portal
+            portal_piece = objectHit
             if portal_piece.open:
                 win()
     if reallyLanded == True:
@@ -1111,9 +1169,10 @@ K = 0x0A # key
 P = 0x10 # plant
 T = 0x14 # TrumpetNose start location
 U = 0x15 # TrumpetNose end location
-V = 0x16 # conveyor
+V = 0x16 # left conveyor
 W = 0x17 # willy start location
-Z = 0x18 # portal
+X = 0x18 # right conveyor
+Z = 0x1A # portal
 
 centralCavern = [
     [B,0,0,0,0,0,0,0,0,0,K,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
@@ -1204,8 +1263,11 @@ def main():
                 cellName = "plant" + "-" + str(cellx) + "-" + str(celly)
                 obstacles.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == V:
-                cellName = "conveyor" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Conveyor(screenx, screeny, screen.scale, cellName))
+                cellName = "leftconveyor" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(LeftConveyor(screenx, screeny, screen.scale, cellName))
+            elif cellContents == X:
+                cellName = "rightconveyor" + "-" + str(cellx) + "-" + str(celly)
+                floors.append(RightConveyor(screenx, screeny, screen.scale, cellName))
             elif cellContents == C:
                 cellName = "crumble" + "-" + str(cellx) + "-" + str(celly)
                 floors.append(CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName))
