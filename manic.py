@@ -264,12 +264,6 @@ class Screen:
     def flashBackground(self):
         self.DISPLAYSURF.fill(self.WHITE)
 
-    def displayBlocks(self):
-        return
-
-    def displayConveyors(self):
-        return
-
     #def load(self, roomData):
         # roomData is a 2D array, 32 wide by 16 tall, each block corresponding to a wall, floor, guardian, key, etc.
         # print("start of map")
@@ -468,6 +462,37 @@ class Floor(StandableObject):
 
     def display(self, screen):
         image = self.floorImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
+class Conveyor(StandableObject):
+    def __init__(self, x, y, scale, name="Conveyor"):
+        print("Creating Conveyor: ", name)
+        StandableObject.__init__(self, x, y, name)
+        self.type = "Conveyor"
+        # print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.conveyorImg = [
+            pygame.image.load('conveyor_1.png'),
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.conveyorImg)
+        for count in range(0, numImages):
+            (conveyorImgWidth, conveyorImgHeight) = self.conveyorImg[count].get_rect().size
+            newHeight = int(conveyorImgHeight * scale)
+            newWidth = int(conveyorImgWidth * scale)
+            picture = pygame.transform.scale(self.conveyorImg[count], (newWidth, newHeight))
+            self.conveyorImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            # print("Conveyor Width: ", self.width)
+            # print("Conveyor Height: ", self.height)
+        self.image = self.conveyorImg[0]
+
+    def restart(self):
+        pass
+
+    def display(self, screen):
+        image = self.conveyorImg[0]
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class CrumblingFloor(StandableObject):
@@ -1015,10 +1040,8 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     screen.displayBackground()
     for floor in floors:
         floor.display(screen)
-    screen.displayBlocks()
     for obstacle in obstacles:
         obstacle.display(screen)
-    screen.displayConveyors()
     for guardian in guardians:
         guardian.move(screen)
         guardian.display(screen)
@@ -1182,7 +1205,7 @@ def main():
                 obstacles.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == V:
                 cellName = "conveyor" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+                floors.append(Conveyor(screenx, screeny, screen.scale, cellName))
             elif cellContents == C:
                 cellName = "crumble" + "-" + str(cellx) + "-" + str(celly)
                 floors.append(CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName))
