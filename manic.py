@@ -8,9 +8,15 @@
 # TODO:
 #  bring in code for Brick as a SolidStandable object again
 #  when hitting the brick try just setting willyJump to the mid-way point and willyWalk or whatever to False
-#  fix up the weird jump lands
-#  conveyors need implenting
+#  landing on a conveyor while walking allows opposite direction
+#  dying should lower the music key
+#  jump sounds slightly too loud
 #  fix up the graphics so they don't need scaling
+#  air supply and lives and score display need displaying
+#  level transitions
+#  game over graphic
+#  further levels
+#  cheat mode
 
 import os, sys, math, re, logging, pdb, time
 # load pygame without getting its hello message
