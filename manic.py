@@ -6,17 +6,17 @@
 # D=8*(1+ABS(J-8));
 
 # TODO:
-#  bring in code for Brick as a SolidStandable object again
-#  when hitting the brick try just setting willyJump to the mid-way point and willyWalk or whatever to False
-#  landing on a conveyor while walking allows opposite direction
+#  hitting bricks doesn't work correctly
+#  landing on a conveyor while walking in the opposite direction to the conveyor direction allows him to walk that way
 #  dying should lower the music key
 #  jump sounds slightly too loud
 #  fix up the graphics so they don't need scaling
 #  air supply and lives and score display need displaying
 #  level transitions
-#  game over graphic
+#  "game over" graphic
 #  further levels
 #  cheat mode
+#  consider pyglet for faster performance
 
 import os, sys, math, re, logging, pdb, time
 # load pygame without getting its hello message
@@ -294,7 +294,7 @@ class Screen:
         # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
 
-        collisionWatchList = ["floor-10-11", "floor-11-11", "floor-12-11", "floor-2-9"]
+        collisionWatchList = ["brick-0-15"]
         collisions = []
 
         for object in objects:
@@ -320,6 +320,14 @@ class Screen:
                     collision = True
                 if collision == True:
                     self.collisionCount += 1
+                    if isinstance(object, SolidStandableObject):
+                        if willy_left <= object_right and willy_right >= object_right and willy_bottom >= object_top + 10:
+                            collisions.append(Collision(object, "blockedleft"))
+                            continue
+                    if isinstance(object, SolidStandableObject):
+                        if willy_right >= object_left and willy_left <= object_left and willy_bottom >= object_top + 10:
+                            collisions.append(Collision(object, "blockedright"))
+                            continue
                     if isinstance(object, StandableObject) and object.standable == True:
                         if object.name in collisionWatchList:
                             print("willy  (L,R,T,B): ", willy_left, willy_right, willy_top, willy_bottom)
@@ -355,7 +363,7 @@ class Object:
         self.image = pygame.image.load('empty.png')
 
     def move(self, screen):
-        self
+        pass
 
     def restart(self):
         self.xpos = self.startxpos
@@ -615,10 +623,15 @@ class Ice(StationaryObject):
     def display(self, screen):
         screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
 
-class Brick(StandableObject):
+class SolidStandableObject(StandableObject):
+    def __init__(self, x, y, scale, name="SolidStandable"):
+        # print("Creating SolidStandable: ", name)
+        StandableObject.__init__(self, x, y, name)
+        
+class Brick(SolidStandableObject):
     def __init__(self, x, y, scale, name="Brick"):
         print("Creating Brick: ", name)
-        StandableObject.__init__(self, x, y, name)
+        SolidStandableObject.__init__(self, x, y, scale, name)
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
@@ -860,6 +873,11 @@ class Willy(MovingObject):
         self.falling = False
         self.fallDistance = 0
         self.conveyorDirection = "none"
+        self.blocked = {
+            "left": False,
+            "right": False,
+            "above": False,
+        }
 
         # moving left animation sprites
         self.willyImgLeft = [
@@ -897,7 +915,6 @@ class Willy(MovingObject):
             print("Willy Width: ", self.width)
             print("Willy Height: ", self.height)
 
-
     def getJumpHeight(self, jumpPosition, jumpDistance, jumpHeight):
         jumpPosition //= 2
         # print("  jumpPosition: ", jumpPosition)
@@ -912,11 +929,11 @@ class Willy(MovingObject):
                 jumpPos = (self.willyJumpDistance - self.willyJump)
                 toJump = self.getJumpHeight(jumpPos, self.willyJumpDistance, self.willyJumpHeight)
                 self.ypos -= toJump
-            if self.direction == "right" and self.walking:
+            if self.direction == "right" and self.walking and self.walking and self.blocked["right"] == False:
                 if (self.xpos < screen.xboundary_right): # don't go off the screen to the right
                     self.xpos += self.xdistance
                     self.willyWalk += 1
-            elif self.direction == "left" and self.walking:
+            elif self.direction == "left" and self.walking and self.blocked["left"] == False:
                 if (self.xpos > screen.xboundary_left): # don't go off the screen to the right
                     self.xpos -= self.xdistance
                     self.willyWalk += 1
@@ -925,11 +942,11 @@ class Willy(MovingObject):
                 jumpPos = (self.willyJumpDistance - self.willyJump)
                 toJump = self.getJumpHeight(jumpPos, self.willyJumpDistance, self.willyJumpHeight)
                 self.ypos += toJump
-            if self.direction == "right" and self.walking:
+            if self.direction == "right" and self.walking and self.walking and self.blocked["right"] == False:
                 if (self.xpos < screen.xboundary_right): # don't go off the screen to the right
                     self.xpos += self.xdistance
                     self.willyWalk += 1
-            elif self.direction == "left" and self.walking:
+            elif self.direction == "left" and self.walking and self.blocked["left"] == False:
                 if (self.xpos > screen.xboundary_left): # don't go off the screen to the right
                     self.xpos -= self.xdistance
                     self.willyWalk += 1
@@ -952,7 +969,7 @@ class Willy(MovingObject):
     def walk(self, walkDirection, screen, distance=-1):
         if distance == -1:
             distance = self.xdistance
-        if walkDirection == "left":
+        if walkDirection == "left" and self.blocked["left"] == False:
             # print("*** walk left")
             self.direction = "left"
             if self.xpos > screen.xboundary_left:
@@ -960,7 +977,7 @@ class Willy(MovingObject):
                 self.willyWalk += 1            
                 if self.willyWalk == len(self.willyImgLeft):
                     self.willyWalk = 0
-        elif walkDirection == "right":
+        elif walkDirection == "right" and self.blocked["right"] == False:
             self.direction = "right"
             if self.xpos < screen.xboundary_right:
                 # print("walking right")
@@ -968,6 +985,9 @@ class Willy(MovingObject):
                 self.willyWalk += 1
                 if self.willyWalk == len(self.willyImgRight):
                     self.willyWalk = 0
+        self.blocked["left"] = False
+        self.blocked["right"] = False
+        self.blocked["above"] = False
 
     def move(self, events, screen, sound):
         if events.keysPressed["dev1"]:
@@ -1143,6 +1163,10 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
             portal_piece = objectHit
             if portal_piece.open:
                 win()
+        elif isinstance(objectHit, SolidStandableObject) and collision.event[0:7] == "blocked":
+            bumpDirection = collision.event[7:]
+            print("bump on", bumpDirection)
+            willy.blocked[bumpDirection] = True
     if reallyLanded == True:
         willy.falling = False
         willy.stopJumping(sound)
@@ -1180,61 +1204,98 @@ W = 0x17 # willy start location
 X = 0x18 # right conveyor
 Z = 0x1A # portal
 
-centralCavern = [
-    [B,0,0,0,0,0,0,0,0,0,K,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
-    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,C,C,C,C,F,C,C,C,C,F,F,F,F,F,F,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
-    [B,F,F,F,0,0,0,0,T,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
-    [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
-    [B,0,W,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
-    ]
-
-testCavern1 = [
-    [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,P,0,0,B],
-    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
-    [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,W,0,0,K,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
-    [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-    [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
-    ]
-testCavern2 = [
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,F,F,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,B,B,B,B,B,B,B,B,B,F,F,F,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-    ]
+caverns = {
+    "centralCavern": [
+        [B,0,0,0,0,0,0,0,0,0,K,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
+        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,C,C,C,C,F,C,C,C,C,F,F,F,F,F,F,F,F,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
+        [B,F,F,F,0,0,0,0,T,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
+        [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+        [B,0,W,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    ],
+    "testCavern1": [
+        [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,P,0,0,B],
+        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
+        [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,W,0,0,K,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+        [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    ],
+    "testCavern2": [
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,F,F,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,B,B,B,B,B,B,B,B,B,F,F,F,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+    ],
+    "emptyCavern": [
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+    ],
+    "brickTests": [
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,W,0,0,0,0,B,B,B,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,0,0,0,0,0,0,0,B],
+        [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+    ],
+}
 
 def main():
     events = Events()
@@ -1248,9 +1309,22 @@ def main():
     portal = [] # actually made of 4 portal objects
     # screen.load(centralCavern)
     scale = 0.7
-    # cavern = testCavern1
-    # cavern = testCavern2
-    cavern = centralCavern
+    
+    # load the specified cavern or the default, falling back to default if specified but not found
+    cavernFound = False
+    defaultCavern = "centralCavern"
+    if len(sys.argv) >= 2:
+        if sys.argv[1] not in caverns.keys():
+            print("Cavern", sys.argv[1], " is not known")
+            cavernFound = False
+        else:
+            print("Loading", sys.argv[1])
+            cavern = caverns[sys.argv[1]]
+            cavernFound = True
+    if cavernFound == False:
+        # default to the classic central cavern
+        cavern = caverns[defaultCavern]
+        
     for cellx in range(0,32):
         for celly in range(0,16):
             cellContents = cavern[celly][cellx]
