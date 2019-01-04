@@ -95,6 +95,7 @@ class Events:
             "dev3": False,
             "test": False,
             "music": False,
+            "restart": False,
         }
 
     def check(self):
@@ -126,6 +127,8 @@ class Events:
                     self.keysPressed["dev3"] = True
                 if e.key == pygame.K_m:
                     self.keysPressed["music"] = True
+                if e.key == pygame.K_r:
+                    self.keysPressed["restart"] = True
             elif e.type == KEYUP:
                 if e.key == pygame.K_t:
                     # print("test released")
@@ -150,6 +153,8 @@ class Events:
                     self.keysPressed["dev3"] = False
                 if e.key == pygame.K_m:
                     self.keysPressed["music"] = False
+                if e.key == pygame.K_r:
+                    self.keysPressed["restart"] = False
             elif e.type == QUIT:
                     print("Manic Miner quit")
                     return False
@@ -1081,7 +1086,7 @@ class Willy(MovingObject):
         self.xpos = self.willystartx
         self.ypos = self.willystarty
 
-def loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal):
+def restartLevel(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal):
     sound.pauseMainMusic()
     sound.playDeathSound()
     for guardian in guardians:
@@ -1094,11 +1099,14 @@ def loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, g
         portal_piece.restart()
     willy.restart()
     sound.stopJumpFallSound()
-    player.lives -= 1
     # flash screen
     # play death sound
     sound.playMainMusic()
     screen.flashBackground()
+        
+def loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal):
+    player.lives -= 1
+    restartLevel(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
 
 def win():
     print("You have won!")
@@ -1108,6 +1116,9 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     if events.keysPressed["music"]:
         print("toggle music")
         sound.toggleMainMusic()
+    if events.keysPressed["restart"]:
+        print("restart")
+        restartLevel(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
     screen.displayBackground()
     for floor in floors:
         floor.move(screen)
@@ -1222,6 +1233,24 @@ caverns = {
         [B,0,W,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
         [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
         [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+    ],
+    "coldRoom": [
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,B,B,B,B,B,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,I,B],
+        [B,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,0,0,0,T,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,C,C,C,F,0,0,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,B,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,B,C,C,B,0,0,B],
+        [B,F,C,C,C,C,C,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,K,0,B,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
+        [B,0,0,K,0,0,0,0,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,C,C,C,C,0,0,0,B,C,C,B,0,0,B],
+        [B,0,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,0,0,K,0,0,0,0,0,B,C,C,B,0,0,B],
+        [B,0,W,0,0,0,0,C,C,C,C,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,0,0,U,Z,Z,B],
+        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+        [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
     ],
     "testCavern1": [
         [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
