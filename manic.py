@@ -1,9 +1,22 @@
 #!/usr/local/bin/python3
 
-# rooms: http://jswremakes.emuunlim.com/Mmt/Manic%20Miner%20Room%20Format.htm
-# -8 -8 -6 -6 -4 -4 -2 -2 0 0 2 2 4 4 6 6 8 8
-# https://www.gamejournal.it/the-sound-of-1-bit-technical-constraint-as-a-driver-for-musical-creativity-on-the-48k-sinclair-zx-spectrum/z
-# D=8*(1+ABS(J-8));
+'''
+  manic.py - A retro platform game engine
+  Copyright (C) 2018 Miner48k
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+'''
 
 # TODO:
 #  hitting bricks doesn't work correctly
@@ -16,7 +29,11 @@
 #  "game over" graphic
 #  further levels
 #  cheat mode
-#  consider pyglet for faster performance
+#  enlarging window makes performance poor
+#   - consider only updating the cells with moving pieces
+#     e.g. blanking the sprite square then drawing the spite
+#     and not redrawing unchanged components anyway
+#   - consider pyglet for faster performance
 
 import os, sys, math, re, logging, pdb, time
 # load pygame without getting its hello message
@@ -240,17 +257,17 @@ class Screen:
         "blue":    (0,0,189)
     }
 
-    def __init__(self, x, y, backgroundColor="black"):
+    def __init__(self, game_x, game_y, backgroundColor="black"):
         pygame.init()
         self.FPS = 15 # frames per second setting
         self.fpsClock = pygame.time.Clock()
         # set up the window
-        self.max_x = x
-        self.max_y = y
+        self.max_x = game_x
+        self.max_y = game_y
         self.scale = 2.4           # how much to scale the loaded sprites
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), 0, 32)
         # DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.FULLSCREEN)
-        self.DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.RESIZABLE)
+        self.DISPLAYSURF = pygame.display.set_mode((game_x, game_y), pygame.RESIZABLE)
         pygame.display.set_caption('Manic Miner')
         pygame.key.set_repeat(1,10)
         # define some boundary values
@@ -270,7 +287,16 @@ class Screen:
         return (coord_x,coord_y)
     
     def setBackgroundColor(self, color):
+        # print("setting background color to ", color, self.RGB[color])
         self.DISPLAYSURF.fill(self.RGB[color])
+        self.backgroundColor = color
+
+    def flash(self):
+        print("flashing")
+        bgColor = self.backgroundColor
+        self.setBackgroundColor("white")
+        pygame.display.update()
+        self.setBackgroundColor(bgColor)
 
     def checkCollisions(self, willy, objects, willyx=-1, willyy=-1):
         # use either willy's current (x,y) by default, or a hypothetical (x,y) to see what would happen
@@ -1101,9 +1127,9 @@ def restartLevel(clock, screen, events, player, keys, floors, obstacles, guardia
     willy.restart()
     sound.stopJumpFallSound()
     # flash screen
+    screen.flash()
     # play death sound
     sound.playMainMusic()
-    screen.setBackgroundColor(screen.backgroundColor)
         
 def loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal):
     player.lives -= 1
@@ -1119,6 +1145,7 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
         sound.toggleMainMusic()
     if events.keysPressed["restart"]:
         print("restart")
+        player.lives = 3
         restartLevel(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
     screen.setBackgroundColor(screen.backgroundColor)
     for floor in floors:
@@ -1174,7 +1201,7 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
         elif isinstance(objectHit, Portal): # handle walking into the portal
             portal_piece = objectHit
             if portal_piece.open:
-                win()
+                return "levelComplete"
         elif isinstance(objectHit, SolidStandableObject) and collision.event[0:7] == "blocked":
             bumpDirection = collision.event[7:]
             print("bump on", bumpDirection)
@@ -1246,7 +1273,7 @@ caverns = {
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,B,B,B,B,B,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,I,B],
             [B,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-            [B,0,0,0,T,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,C,C,C,F,0,0,0,0,0,0,B],
+            [B,T,0,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,U,0,C,C,C,F,0,0,0,0,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,B,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,B,C,C,B,0,0,B],
@@ -1381,44 +1408,36 @@ caverns = {
     ],
 }
 
-def main():
-    # load the specified cavern or the default, falling back to default if specified but not found
-    cavernFound = False
-    defaultCavern = "centralCavern"
-    if len(sys.argv) >= 2:
-        if sys.argv[1] not in caverns.keys():
-            print("Cavern", sys.argv[1], " is not known")
-            cavernFound = False
-        else:
-            print("Loading", sys.argv[1])
-            cavern = caverns[sys.argv[1]]
-            cavernFound = True
-    if cavernFound == False:
-        # default to the classic central cavern
-        cavern = caverns[defaultCavern]
+guardians = []
+keys = []
+floors = []
+obstacles = []
+portal = [] # actually made of 4 portal objects
 
+def loadCavern(cavern, screen):
+    global willy
+    global portal
+    global obstacles
+    global floors
+    global keys
+    global guardians
+
+    portal = []
+    obstacles = []
+    floors = []
+    keys = []
+    guardians = []
+    
     # cavern data
     cavernMap = cavern[0]
-    backgrounColor = cavern[1]
+    bgColor = cavern[1]
     floorColor = cavern[2]
     conveyorColor = cavern[3]
-    
-    events = Events()
-    screen = Screen(640,320, cavern[1])
-    player = Player()
-    sound = Sound()
-    guardians = []
-    keys = []
-    floors = []
-    obstacles = []
-    portal = [] # actually made of 4 portal objects
-    # screen.load(centralCavern)
-    scale = 0.7
-    
+
     for celly in range(0,16):
         for cellx in range(0,32):
             cellContents = cavernMap[celly][cellx]
-            # print("handling map: ", cellx, celly, " = ", cellContents)
+            print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
             if cellContents == B:
                 cellName = "brick-" + str(cellx) + "-" + str(celly)
@@ -1480,7 +1499,42 @@ def main():
                     lastGuardian = guardians[len(guardians)-1]
                     if lastGuardian != None:
                         lastGuardian.setEndPos(screenx, screeny)
+    screen.setBackgroundColor(bgColor)
 
+def main():
+    # load the specified cavern or the default, falling back to default if specified but not found
+    cavernFound = False
+    defaultCavern = "centralCavern"
+    if len(sys.argv) >= 2:
+        if sys.argv[1] not in caverns.keys():
+            print("Cavern", sys.argv[1], " is not known")
+            cavernFound = False
+        else:
+            print("Loading", sys.argv[1])
+            cavern = caverns[sys.argv[1]]
+            cavernFound = True
+    if cavernFound == False:
+        # default to the classic central cavern
+        cavern = caverns[defaultCavern]
+
+    # screen (h x w): 6.802 x 9.071 (25% larger height and width than inner game area)
+    # inner game area (h x w): 5.419 x 7.255
+    # top/bottom border height: 0.672 (10% of screen height)
+    # left/right border width: 0.902 (10% of screen width)
+    # game area height: 3.611
+    # cavern name height: 0.218
+    # air supply height: 0.213
+    # high score, lives height: 1.352
+    
+    events = Events()
+    screen = Screen(640, 320, cavern[1])
+    player = Player()
+    sound = Sound()
+    scale = 0.7
+
+    game = ["centralCavern", "coldRoom", "theMenagerie"]
+    levelNumber = 0
+    loadCavern(caverns[game[levelNumber]], screen)
     clock = pygame.time.Clock()
     sound.startMainMusic()
 
@@ -1492,7 +1546,12 @@ def main():
 
     while running and player.lives > 0:
         running = events.check()
-        update(clock, player, events, keys, guardians, willy, screen, sound, floors, obstacles, portal)
+        if update(clock, player, events, keys, guardians, willy, screen, sound, floors, obstacles, portal):
+            # player just completed a level
+            levelNumber += 1
+            if levelNumber >= len(game):
+                win()
+            loadCavern(caverns[game[levelNumber]], screen)
         clock.tick(screen.FPS)
     if player.lives == 0:
         sound.stopAll()
