@@ -1214,6 +1214,7 @@ U = 0x15 # TrumpetNose end location
 V = 0x16 # left conveyor
 W = 0x17 # willy start location
 X = 0x18 # right conveyor
+Y = 0x19 # combination of U and Z
 Z = 0x1A # portal
 
 caverns = {
@@ -1255,9 +1256,9 @@ caverns = {
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,C,C,C,C,0,0,0,B,C,C,B,0,0,B],
             [B,0,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,0,0,K,0,0,0,0,0,B,C,C,B,0,0,B],
-            [B,0,W,0,0,0,0,C,C,C,C,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,0,0,U,Z,Z,B],
+            [B,0,W,0,0,0,0,C,C,C,C,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,0,0,U,Z,Y,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+            [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
         ],
         "blue",    # background
         "magenta", # floors
@@ -1447,9 +1448,14 @@ def main():
             elif cellContents == K:
                 cellName = "key" + "-" + str(cellx) + "-" + str(celly)
                 keys.append(Key(screenx, screeny, screen.scale, cellName))
-            elif cellContents == Z:
+            elif cellContents == Z or cellContents == Y:
                 cellName = "portal" + "-" + str(cellx) + "-" + str(celly)
                 portal.append(Portal(screenx, screeny, screen.scale * 0.7, cellName))
+                if cellContents == Y:
+                    # we also set the guardian end
+                    lastGuardian = guardians[len(guardians)-1]
+                    if lastGuardian != None:
+                        lastGuardian.setEndPos(screenx, screeny)
 
     clock = pygame.time.Clock()
     sound.startMainMusic()
