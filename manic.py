@@ -229,7 +229,18 @@ class Collision:
         self.event = event
 
 class Screen:
-    def __init__(self, x, y):
+    RGB = {
+        "black":   (0, 0, 0),
+        "white":   (255, 255, 255),
+        "yellow":  (189,189,0),
+        "magenta": (189,0,189),
+        "cyan":    (0,189,189),
+        "green":   (0,189,0),
+        "red":     (189,0,0),
+        "blue":    (0,0,189)
+    }
+
+    def __init__(self, x, y, backgroundColor="black"):
         pygame.init()
         self.FPS = 15 # frames per second setting
         self.fpsClock = pygame.time.Clock()
@@ -242,8 +253,6 @@ class Screen:
         self.DISPLAYSURF = pygame.display.set_mode((self.max_x, self.max_y), pygame.RESIZABLE)
         pygame.display.set_caption('Manic Miner')
         pygame.key.set_repeat(1,10)
-        self.BLACK = (0, 0, 0)
-        self.WHITE = (255, 255, 255)
         # define some boundary values
         self.xboundary_left = 5
         self.xboundary_right = self.max_x - 50 # willyImgWidth*2
@@ -253,39 +262,16 @@ class Screen:
         self.cellWidth = self.max_x / 32
         self.cellHeight = self.max_y / 16
         self.alpha = 255
-        self.RGB = {
-            "yellow":  (189,189,0),
-            "magenta": (189,0,189),
-            "cyan":    (0,189,189),
-            "green":   (0,189,0),
-            "red":     (189,0,0),
-        }
+        self.backgroundColor = backgroundColor
 
     def cellToCoords(self, x, y):
         coord_x = x * self.cellWidth
         coord_y = y * self.cellHeight
         return (coord_x,coord_y)
     
-    # given coordinates (x,y), return the corresponding 
-    # def getScreenLoc(self, x, y):
-        
-    def displayBackground(self):
-        self.DISPLAYSURF.fill(self.BLACK)
+    def setBackgroundColor(self, color):
+        self.DISPLAYSURF.fill(self.RGB[color])
 
-    def flashBackground(self):
-        self.DISPLAYSURF.fill(self.WHITE)
-
-    #def load(self, roomData):
-        # roomData is a 2D array, 32 wide by 16 tall, each block corresponding to a wall, floor, guardian, key, etc.
-        # print("start of map")
-        #for row in range (0,15): # each row
-            # print("row: ", row)
-            # for col in range (0,31): # each column
-                # print("col: ", col)
-                # print(roomData[row][col],end=', ')
-            # print()
-        ## print("end of map")
-    
     def checkCollisions(self, willy, objects, willyx=-1, willyy=-1):
         # use either willy's current (x,y) by default, or a hypothetical (x,y) to see what would happen
         if (willyx == -1):
@@ -318,9 +304,19 @@ class Screen:
                 if willy_left <= object_right and willy_left >= object_left - 5:
                     horizontal = True
                 if willy_bottom >= object_top and willy_bottom <= object_bottom:
-                    vertical = True
+                    # give a little more tolerance on guardians
+                    if isinstance(object, Guardian):
+                        if willy_bottom >= object_top + 5:
+                            vertical = True
+                    else:
+                        vertical = True
                 if willy_top <= object_bottom and willy_top >= object_top:
-                    vertical = True
+                    # give a little more tolerance on guardians
+                    if isinstance(object, Guardian):
+                        if willy_bottom >= object_bottom - 5:
+                            vertical = True
+                    else:
+                        vertical = True
                 if horizontal == True and vertical == True:
                     collision = True
                 if collision == True:
@@ -346,17 +342,20 @@ class Screen:
                     collisions.append(Collision(object, "collision"))
         return collisions
 
-    def colorImage(self, image, color):
+    @staticmethod
+    def colorImage(image, color):
+        if color == "none":
+            return image
         print("setting to " + color)
         imageCopy = image.copy()
         clear = (255, 255, 255, 0)
-        rgb = self.RGB[color] + (0,)
+        rgb = Screen.RGB[color] + (0,)
         imageCopy.fill(clear, None, pygame.BLEND_RGBA_SUB)
         imageCopy.fill(rgb, None, pygame.BLEND_RGBA_ADD)
         return imageCopy
 
 class Object:
-    def __init__(self, start_x, start_y, name="NoName"):
+    def __init__(self, start_x, start_y, name="NoName", color="none"):
         # print("Creating Object: ", name)
         self.xpos = start_x
         self.ypos = start_y
@@ -366,6 +365,7 @@ class Object:
         self.name = name
         self.collidable = False
         self.image = pygame.image.load('empty.png')
+        self.color = color
 
     def move(self, screen):
         pass
@@ -374,9 +374,9 @@ class Object:
         self.xpos = self.startxpos
         self.ypos = self.startypos
 
-    def setColor(self, screen, color):
+    def setColor(self, color):
         print("setColor ", self.name, color)
-        self.image = screen.colorImage(self.image, color)
+        self.image = Screen.colorImage(self.image, color)
         return
 
     def display(self, screen):
@@ -393,9 +393,9 @@ class MovingObject(Object):
         self.direction = "right"
 
 class StationaryObject(Object):
-    def __init__(self, x, y, name="StationaryObject"):
+    def __init__(self, x, y, name="StationaryObject", color="none"):
         # print("Creating StationaryObject: ", name)
-        Object.__init__(self, x, y, name)
+        Object.__init__(self, x, y, name, color)
         self.type = "StationaryObject"
         self.collidable = True
 
@@ -449,14 +449,14 @@ class Portal(StationaryObject):
         screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
         
 class StandableObject(StationaryObject):
-    def __init__(self, x, y, name="StandableObject"):
-        StationaryObject.__init__(self, x, y, name)
+    def __init__(self, x, y, name="StandableObject", color="none"):
+        StationaryObject.__init__(self, x, y, name, color)
         self.standable = True
 
 class Floor(StandableObject):
-    def __init__(self, x, y, scale, name="Floor"):
+    def __init__(self, x, y, scale, name="Floor", color="none"):
         print("Creating Floor: ", name)
-        StandableObject.__init__(self, x, y, name)
+        StandableObject.__init__(self, x, y, name, color)
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
@@ -470,11 +470,13 @@ class Floor(StandableObject):
             newHeight = int(floorImgHeight * scale)
             newWidth = int(floorImgWidth * scale)
             picture = pygame.transform.scale(self.floorImg[count], (newWidth, newHeight))
+            picture = Screen.colorImage(picture, color)
             self.floorImg[count] = picture
             (floorImgWidth,floorImgHeight) = self.floorImg[count].get_rect().size
             newHeight = int(floorImgHeight * scale)
             newWidth = int(floorImgWidth * scale)
             picture = pygame.transform.scale(self.floorImg[count], (newWidth,newHeight))
+            picture = Screen.colorImage(picture, color)
             self.floorImg[count] = picture
             self.width = newWidth
             self.height = newHeight
@@ -490,8 +492,8 @@ class Floor(StandableObject):
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class Conveyor(StandableObject):
-    def __init__(self, x, y, scale, name="Conveyor"):
-        StandableObject.__init__(self, x, y, name)
+    def __init__(self, x, y, scale, name="Conveyor", color="none"):
+        StandableObject.__init__(self, x, y, name, color)
         print("x: ", x, ", y: ", y, ", scale: ", scale, ", name: ", name)
         self.conveyorDirection = "none"
         self.conveyorPosition = 0
@@ -513,6 +515,7 @@ class Conveyor(StandableObject):
             newHeight = int(conveyorImgHeight * scale)
             newWidth = int(conveyorImgWidth * scale)
             picture = pygame.transform.scale(self.conveyorImg[count], (newWidth, newHeight))
+            picture = Screen.colorImage(picture, color)
             self.conveyorImg[count] = picture
             self.width = newWidth
             self.height = newHeight
@@ -527,9 +530,9 @@ class Conveyor(StandableObject):
         screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
         
 class LeftConveyor(Conveyor):
-    def __init__(self, x, y, scale, name="Conveyor"):
+    def __init__(self, x, y, scale, name="Conveyor", color="none"):
         print("Creating LeftConveyor: ", name)
-        Conveyor.__init__(self, x, y, scale, name)
+        Conveyor.__init__(self, x, y, scale, name, color)
         self.type = "LeftConveyor"
         self.conveyorDirection = "left"
 
@@ -540,9 +543,9 @@ class LeftConveyor(Conveyor):
         self.image = self.conveyorImg[self.conveyorPosition]
 
 class RightConveyor(Conveyor):
-    def __init__(self, x, y, scale, name="Conveyor"):
+    def __init__(self, x, y, scale, name="Conveyor", color="none"):
         print("Creating RightConveyor: ", name)
-        Conveyor.__init__(self, x, y, scale, name)
+        Conveyor.__init__(self, x, y, scale, name, color)
         self.type = "LeftConveyor"
         self.conveyorDirection = "right"
 
@@ -553,9 +556,9 @@ class RightConveyor(Conveyor):
         self.image = self.conveyorImg[self.conveyorPosition]
 
 class CrumblingFloor(StandableObject):
-    def __init__(self, x, y, scale, name="CrumblingFloor"):
+    def __init__(self, x, y, scale, name="CrumblingFloor", color="none"):
         print("Creating CrumblingFloor: ", name)
-        StandableObject.__init__(self, x, y, name)
+        StandableObject.__init__(self, x, y, name, color)
         self.type = "CrumblingFloor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
@@ -576,11 +579,13 @@ class CrumblingFloor(StandableObject):
             newHeight = int(floorImgHeight * scale)
             newWidth = int(floorImgWidth * scale)
             picture = pygame.transform.scale(self.floorImg[count], (newWidth, newHeight))
+            picture = Screen.colorImage(picture, color)
             self.floorImg[count] = picture
             (floorImgWidth,floorImgHeight) = self.floorImg[count].get_rect().size
             newHeight = int(floorImgHeight * scale)
             newWidth = int(floorImgWidth * scale)
             picture = pygame.transform.scale(self.floorImg[count], (newWidth,newHeight))
+            picture = Screen.colorImage(picture, color)
             self.floorImg[count] = picture
             self.width = newWidth
             self.height = newHeight
@@ -629,14 +634,13 @@ class Ice(StationaryObject):
         screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
 
 class SolidStandableObject(StandableObject):
-    def __init__(self, x, y, scale, name="SolidStandable"):
-        # print("Creating SolidStandable: ", name)
-        StandableObject.__init__(self, x, y, name)
+    def __init__(self, x, y, scale, name="SolidStandable", color="none"):
+        StandableObject.__init__(self, x, y, name, color)
         
 class Brick(SolidStandableObject):
-    def __init__(self, x, y, scale, name="Brick"):
+    def __init__(self, x, y, scale, name="Brick", color="none"):
         print("Creating Brick: ", name)
-        SolidStandableObject.__init__(self, x, y, scale, name)
+        SolidStandableObject.__init__(self, x, y, scale, name, color)
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
@@ -650,11 +654,13 @@ class Brick(SolidStandableObject):
             newHeight = int(brickImgHeight * scale)
             newWidth = int(brickImgWidth * scale)
             picture = pygame.transform.scale(self.brickImg[count], (newWidth, newHeight))
+            picture = Screen.colorImage(picture, color)
             self.brickImg[count] = picture
             (brickImgWidth,brickImgHeight) = self.brickImg[count].get_rect().size
             newHeight = int(brickImgHeight * scale)
             newWidth = int(brickImgWidth * scale)
             picture = pygame.transform.scale(self.brickImg[count], (newWidth,newHeight))
+            picture = Screen.colorImage(picture, color)
             self.brickImg[count] = picture
             self.width = newWidth
             self.height = newHeight
@@ -749,11 +755,6 @@ class Key(StationaryObject):
         self.appears = True
         self.collidable = True
 
-class Escalator(StationaryObject):
-    def __init__(self, start_x, start_y, scale, name = "Escalator"):
-        StationaryObject.__init__(self, start_x, start_y, name)
-        self.type = "Escalator"
-        
 class Guardian(MovingObject):
     def __init__(self, start_x, start_y, name = "Guardian"):
         MovingObject.__init__(self, start_x, start_y, name)
@@ -1102,7 +1103,7 @@ def restartLevel(clock, screen, events, player, keys, floors, obstacles, guardia
     # flash screen
     # play death sound
     sound.playMainMusic()
-    screen.flashBackground()
+    screen.setBackgroundColor(screen.backgroundColor)
         
 def loseLifeAndRestart(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal):
     player.lives -= 1
@@ -1119,7 +1120,7 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     if events.keysPressed["restart"]:
         print("restart")
         restartLevel(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
-    screen.displayBackground()
+    screen.setBackgroundColor(screen.backgroundColor)
     for floor in floors:
         floor.move(screen)
         floor.display(screen)
@@ -1217,128 +1218,146 @@ Z = 0x1A # portal
 
 caverns = {
     "centralCavern": [
-        [B,0,0,0,0,0,0,0,0,0,K,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
-        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,C,C,C,C,F,C,C,C,C,F,F,F,F,F,F,F,F,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
-        [B,F,F,F,0,0,0,0,T,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
-        [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
-        [B,0,W,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+        [
+            [B,0,0,0,0,0,0,0,0,0,K,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,K,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,K,0,0,P,0,0,B],
+            [B,F,F,F,F,F,F,F,F,F,F,F,F,F,C,C,C,C,F,C,C,C,C,F,F,F,F,F,F,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,B],
+            [B,F,F,F,0,0,0,0,T,0,0,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
+            [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+            [B,0,W,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+        ],
+        "black", # background
+        "red",   # floors
+        "green", # conveyors
     ],
     "coldRoom": [
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,B,B,B,B,B,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,I,B],
-        [B,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,T,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,0,0,C,C,C,F,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,B,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,B,C,C,B,0,0,B],
-        [B,F,C,C,C,C,C,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,K,0,B,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
-        [B,0,0,K,0,0,0,0,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,C,C,C,C,0,0,0,B,C,C,B,0,0,B],
-        [B,0,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,0,0,K,0,0,0,0,0,B,C,C,B,0,0,B],
-        [B,0,W,0,0,0,0,C,C,C,C,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,0,0,U,Z,Z,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-        [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        [
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,B,B,B,B,B,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,K,0,0,0,I,B],
+            [B,0,0,0,0,0,K,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,T,0,0,0,0,0,U,0,0,0,0,0,0,0,0,0,0,C,C,C,F,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,B,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,B,C,C,B,0,0,B],
+            [B,F,C,C,C,C,C,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,K,0,B,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
+            [B,0,0,K,0,0,0,0,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,C,C,C,C,0,0,0,B,C,C,B,0,0,B],
+            [B,0,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,C,C,B,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,0,0,K,0,0,0,0,0,B,C,C,B,0,0,B],
+            [B,0,W,0,0,0,0,C,C,C,C,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,0,0,U,Z,Z,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        ],
+        "blue",    # background
+        "magenta", # floors
+        "yellow",  # conveyors
     ],
     "testCavern1": [
-        [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,P,0,0,B],
-        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
-        [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,W,0,0,K,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
-        [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-        [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+        [
+            [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,P,0,0,0,P,0,0,B],
+            [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,0,P,0,0,0,0,0,0,0,0,0,B],
+            [B,F,F,F,F,0,0,0,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,V,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,W,0,0,K,0,0,0,0,0,0,P,0,0,0,0,0,0,0,B,B,B,C,C,C,C,C,F,F,F,B],
+            [B,0,0,0,0,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,B],
+        ],
+        "black", # background
+        "red",   # floors
+        "green", # conveyors
     ],
     "testCavern2": [
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,F,F,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,B,B,B,B,B,B,B,B,B,F,F,F,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        [
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,F,F,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,B,B,B,B,B,B,B,B,B,F,F,F,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+        ],
+        "black", # background
+        "red",   # floors
+        "green", # conveyors
     ],
     "emptyCavern": [
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        [
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,W,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        ],
+        "black", # background
+        "red",   # floors
+        "green", # conveyors
     ],
     "brickTests": [
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,0,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,W,0,0,0,0,B,B,B,0,0,0,0,0,0,0,0,B],
-        [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,0,0,0,0,0,0,0,B],
-        [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        [
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,W,0,0,0,0,B,B,B,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B,B,B,B,B,B,0,0,0,0,0,0,0,B],
+            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        ],
+        "black", # background
+        "red",   # floors
+        "green", # conveyors
     ],
 }
 
 def main():
-    events = Events()
-    screen = Screen(640,320)
-    player = Player()
-    sound = Sound()
-    guardians = []
-    keys = []
-    floors = []
-    obstacles = []
-    portal = [] # actually made of 4 portal objects
-    # screen.load(centralCavern)
-    scale = 0.7
-    
     # load the specified cavern or the default, falling back to default if specified but not found
     cavernFound = False
     defaultCavern = "centralCavern"
@@ -1353,18 +1372,40 @@ def main():
     if cavernFound == False:
         # default to the classic central cavern
         cavern = caverns[defaultCavern]
-        
+
+    # cavern data
+    cavernMap = cavern[0]
+    backgrounColor = cavern[1]
+    floorColor = cavern[2]
+    conveyorColor = cavern[3]
+    
+    events = Events()
+    screen = Screen(640,320, cavern[1])
+    player = Player()
+    sound = Sound()
+    guardians = []
+    keys = []
+    floors = []
+    obstacles = []
+    portal = [] # actually made of 4 portal objects
+    # screen.load(centralCavern)
+    scale = 0.7
+    
     for cellx in range(0,32):
         for celly in range(0,16):
-            cellContents = cavern[celly][cellx]
+            cellContents = cavernMap[celly][cellx]
             # print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
             if cellContents == B:
                 cellName = "brick" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Brick(screenx, screeny, screen.scale * 0.7, cellName))
+                newbrick = Brick(screenx, screeny, screen.scale * 0.7, cellName)
+                newbrick.setColor(floorColor)
+                floors.append(newbrick)
             elif cellContents == F:
                 cellName = "floor" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(Floor(screenx, screeny, screen.scale * 0.7, cellName))
+                newfloor = Floor(screenx, screeny, screen.scale * 0.7, cellName, floorColor)
+                newfloor.setColor(floorColor)
+                floors.append(newfloor)
             elif cellContents == I:
                 cellName = "ice" + "-" + str(cellx) + "-" + str(celly)
                 obstacles.append(Ice(screenx, screeny, screen.scale, cellName))
@@ -1373,26 +1414,36 @@ def main():
                 obstacles.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == V:
                 cellName = "leftconveyor" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(LeftConveyor(screenx, screeny, screen.scale, cellName))
+                newconveyor = LeftConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
+                newconveyor.setColor(conveyorColor)
+                floors.append(newconveyor)
             elif cellContents == X:
                 cellName = "rightconveyor" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(RightConveyor(screenx, screeny, screen.scale, cellName))
+                newconveyor = RightConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
+                newconveyor.setColor(conveyorColor)
+                floors.append(newconveyor)
             elif cellContents == C:
                 cellName = "crumble" + "-" + str(cellx) + "-" + str(celly)
-                floors.append(CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName))
+                newcrumble = CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName, floorColor)
+                newcrumble.setColor(floorColor)
+                floors.append(newcrumble)
             elif cellContents == W:
                 cellName = "willy" + "-" + str(cellx) + "-" + str(celly)
                 screeny -= 10
                 willy = Willy(screenx, screeny, screen.scale)
             elif cellContents == T:
                 cellName = "trumpetnose start" + "-" + str(cellx) + "-" + str(celly)
-                guardians.append(TrumpetNose(screenx, screeny, screen.scale, cellName))
+                newTrumpetNose = TrumpetNose(screenx, screeny, screen.scale, cellName)
+                guardians.append(newTrumpetNose)
             elif cellContents == U:
+                lastTrumpetNose = None
                 for guardian in guardians:
                     print("Looking for TN: ", guardian.subtype)
                     if guardian.subtype == "TrumpetNose":
-                        cellName = "trumpetnose end" + "-" + str(cellx) + "-" + str(celly)
-                        guardian.setEndPos(screenx, screeny)
+                        lastTrumpetNose = guardian
+                if lastTrumpetNose != None:
+                    cellName = "trumpetnose end" + "-" + str(cellx) + "-" + str(celly)
+                    lastTrumpetNose.setEndPos(screenx, screeny)
             elif cellContents == K:
                 cellName = "key" + "-" + str(cellx) + "-" + str(celly)
                 keys.append(Key(screenx, screeny, screen.scale, cellName))
