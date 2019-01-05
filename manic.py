@@ -346,7 +346,7 @@ class Screen:
     def colorImage(image, color):
         if color == "none":
             return image
-        print("setting to " + color)
+        # print("setting to " + color)
         imageCopy = image.copy()
         clear = (255, 255, 255, 0)
         rgb = Screen.RGB[color] + (0,)
@@ -375,7 +375,7 @@ class Object:
         self.ypos = self.startypos
 
     def setColor(self, color):
-        print("setColor ", self.name, color)
+        # print("setColor ", self.name, color)
         self.image = Screen.colorImage(self.image, color)
         return
 
@@ -455,7 +455,7 @@ class StandableObject(StationaryObject):
 
 class Floor(StandableObject):
     def __init__(self, x, y, scale, name="Floor", color="none"):
-        print("Creating Floor: ", name)
+        # print("Creating Floor: ", name)
         StandableObject.__init__(self, x, y, name, color)
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
@@ -531,7 +531,7 @@ class Conveyor(StandableObject):
         
 class LeftConveyor(Conveyor):
     def __init__(self, x, y, scale, name="Conveyor", color="none"):
-        print("Creating LeftConveyor: ", name)
+        # print("Creating LeftConveyor: ", name)
         Conveyor.__init__(self, x, y, scale, name, color)
         self.type = "LeftConveyor"
         self.conveyorDirection = "left"
@@ -544,7 +544,7 @@ class LeftConveyor(Conveyor):
 
 class RightConveyor(Conveyor):
     def __init__(self, x, y, scale, name="Conveyor", color="none"):
-        print("Creating RightConveyor: ", name)
+        # print("Creating RightConveyor: ", name)
         Conveyor.__init__(self, x, y, scale, name, color)
         self.type = "LeftConveyor"
         self.conveyorDirection = "right"
@@ -557,7 +557,7 @@ class RightConveyor(Conveyor):
 
 class CrumblingFloor(StandableObject):
     def __init__(self, x, y, scale, name="CrumblingFloor", color="none"):
-        print("Creating CrumblingFloor: ", name)
+        # print("Creating CrumblingFloor: ", name)
         StandableObject.__init__(self, x, y, name, color)
         self.type = "CrumblingFloor"
         # print("x,y = ", self.xpos, ",", self.ypos)
@@ -614,7 +614,7 @@ class CrumblingFloor(StandableObject):
 
 class Ice(StationaryObject):
     def __init__(self, x, y, scale, name="Ice"):
-        print("Creating Ice: ", name)
+        # print("Creating Ice: ", name)
         StationaryObject.__init__(self, x, y, name)
         self.type = "Ice"
         # sprite
@@ -639,7 +639,7 @@ class SolidStandableObject(StandableObject):
         
 class Brick(SolidStandableObject):
     def __init__(self, x, y, scale, name="Brick", color="none"):
-        print("Creating Brick: ", name)
+        # print("Creating Brick: ", name)
         SolidStandableObject.__init__(self, x, y, scale, name, color)
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
@@ -674,7 +674,7 @@ class Brick(SolidStandableObject):
 
 class Plant(StationaryObject):
     def __init__(self, x, y, scale, name="Floor"):
-        print("Creating Plant: ", name)
+        # print("Creating Plant: ", name)
         StationaryObject.__init__(self, x, y, name)
         self.type = "Plant"
         # print("x,y = ", self.xpos, ",", self.ypos)
@@ -708,7 +708,7 @@ class Plant(StationaryObject):
 class Key(StationaryObject):
     def __init__(self, start_x, start_y, scale, name="Key"):
         StationaryObject.__init__(self, start_x, start_y, name)
-        print("Creating Key: ", name)
+        # print("Creating Key: ", name)
         self.type = "Key"
         self.appears = True
         self.scorevalue = 100
@@ -786,7 +786,7 @@ class TrumpetNose(Guardian):
     def __init__(self, start_x, start_y, willyScale, name="TrumpetNose"):
         Guardian.__init__(self, start_x, start_y, name)
         self.subtype = "TrumpetNose"
-        print("Creating TrumpetNose: ", name)
+        # print("Creating TrumpetNose: ", name)
         # moving left animation sprites
         self.trumpetNoseImgLeft = [
             pygame.image.load('trumpetnose_left_1.png'),
@@ -856,7 +856,7 @@ class Player:
         
 class Willy(MovingObject):
     def __init__(self, start_x, start_y, scale):
-        print("Creating Willy at ", start_x, start_y)
+        # print("Creating Willy at ", start_x, start_y)
         MovingObject.__init__(self, start_x, start_y, "Willy")
         # motion distances
         self.xdistance = 4              # how far left and right motion moves Willy
@@ -1264,6 +1264,29 @@ caverns = {
         "magenta", # floors
         "yellow",  # conveyors
     ],
+    "theMenagerie": [
+        [
+            [B,0,0,0,0,K,0,0,0,P,0,0,0,K,0,0,P,0,0,0,P,0,0,0,K,0,0,0,P,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,T,0,0,0,0,0,0,0,0,0,0,0,0,0,U,0,T,0,0,0,0,0,0,0,0,0,0,0,0,U,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,F,F,F,F,F,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,V,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,0,0,0,0,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,0,W,0,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,U,F,F,F,F,F,F,F,F,F,F,F,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
+        ],
+        "black",   # background
+        "cyan",    # floors
+        "red",     # conveyors
+    ],
     "testCavern1": [
         [
             [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
@@ -1392,58 +1415,59 @@ def main():
     # screen.load(centralCavern)
     scale = 0.7
     
-    for cellx in range(0,32):
-        for celly in range(0,16):
+    for celly in range(0,16):
+        for cellx in range(0,32):
             cellContents = cavernMap[celly][cellx]
             # print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
             if cellContents == B:
-                cellName = "brick" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "brick-" + str(cellx) + "-" + str(celly)
                 newbrick = Brick(screenx, screeny, screen.scale * 0.7, cellName)
                 newbrick.setColor(floorColor)
                 floors.append(newbrick)
             elif cellContents == F:
-                cellName = "floor" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "floor-" + str(cellx) + "-" + str(celly)
                 newfloor = Floor(screenx, screeny, screen.scale * 0.7, cellName, floorColor)
                 newfloor.setColor(floorColor)
                 floors.append(newfloor)
             elif cellContents == I:
-                cellName = "ice" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "ice-" + str(cellx) + "-" + str(celly)
                 obstacles.append(Ice(screenx, screeny, screen.scale, cellName))
             elif cellContents == P:
-                cellName = "plant" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "plant-" + str(cellx) + "-" + str(celly)
                 obstacles.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
             elif cellContents == V:
-                cellName = "leftconveyor" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "leftconveyor-" + str(cellx) + "-" + str(celly)
                 newconveyor = LeftConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
                 newconveyor.setColor(conveyorColor)
                 floors.append(newconveyor)
             elif cellContents == X:
-                cellName = "rightconveyor" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "rightconveyor-" + str(cellx) + "-" + str(celly)
                 newconveyor = RightConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
                 newconveyor.setColor(conveyorColor)
                 floors.append(newconveyor)
             elif cellContents == C:
-                cellName = "crumble" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "crumble-" + str(cellx) + "-" + str(celly)
                 newcrumble = CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName, floorColor)
                 newcrumble.setColor(floorColor)
                 floors.append(newcrumble)
             elif cellContents == W:
-                cellName = "willy" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "willy-" + str(cellx) + "-" + str(celly)
                 screeny -= 10
                 willy = Willy(screenx, screeny, screen.scale)
             elif cellContents == T:
-                cellName = "trumpetnose start" + "-" + str(cellx) + "-" + str(celly)
+                cellName = "trumpetnose-" + str(cellx) + "-" + str(celly)
                 newTrumpetNose = TrumpetNose(screenx, screeny, screen.scale, cellName)
                 guardians.append(newTrumpetNose)
             elif cellContents == U:
                 lastTrumpetNose = None
                 for guardian in guardians:
-                    print("Looking for TN: ", guardian.subtype)
+                    print("Looking for TN: ", guardian.name)
                     if guardian.subtype == "TrumpetNose":
                         lastTrumpetNose = guardian
+                print("last guardian found was", lastTrumpetNose, "named", lastTrumpetNose.name)
                 if lastTrumpetNose != None:
-                    cellName = "trumpetnose end" + "-" + str(cellx) + "-" + str(celly)
+                    print("setting", lastTrumpetNose.name, " end position to: (", cellx, ",", celly, ")")
                     lastTrumpetNose.setEndPos(screenx, screeny)
             elif cellContents == K:
                 cellName = "key" + "-" + str(cellx) + "-" + str(celly)
