@@ -296,7 +296,7 @@ class Screen:
         bgColor = self.backgroundColor
         self.setBackgroundColor("white")
         pygame.display.update()
-        self.setBackgroundColor(bgColor)
+        self.backgroundColor = bgColor
 
     def checkCollisions(self, willy, objects, willyx=-1, willyy=-1):
         # use either willy's current (x,y) by default, or a hypothetical (x,y) to see what would happen
@@ -1314,7 +1314,7 @@ caverns = {
         "cyan",    # floors
         "red",     # conveyors
     ],
-    "testCavern1": [
+    "centralCavernTest": [
         [
             [B,0,0,0,0,0,0,0,0,0,0,0,I,0,0,0,0,I,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
