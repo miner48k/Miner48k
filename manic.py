@@ -35,7 +35,7 @@
 #     and not redrawing unchanged components anyway
 #   - consider pyglet for faster performance
 
-import os, sys, math, re, logging, pdb, time
+import os, sys, math, re, logging, pdb, time, textwrap, re
 # load pygame without getting its hello message
 with open(os.devnull, 'w') as f:
     # disable stdout
@@ -114,9 +114,45 @@ class Events:
             "music": False,
             "restart": False,
         }
+        self.textMove = "None"
+        rows, columns = os.popen('stty size', 'r').read().split()
+        self.terminalWidth = int(columns)
+        self.infocomMode = False
+        self.infocomRepeatCount = 0
 
     def check(self):
         self.eventCount += 1
+
+        if self.infocomMode == True:
+            self.keysPressed["left"] = False
+            self.keysPressed["right"] = False
+            self.keysPressed["jump"] = False
+            print("repeat count:", self.infocomRepeatCount, "event count:", self.eventCount)
+            if self.eventCount % 10 == 0:
+                if self.infocomRepeatCount > 0:
+                    self.infocomRepeatCount -= 1
+                else:
+                    roomDesc = "You are standing in a large mine with a variety of platforms and shafts around you."
+                    textwrap.wrap(roomDesc, self.terminalWidth)
+                    print(roomDesc)
+                    print()
+                    self.textMove = input("> ")
+                    match = re.search(r'\d', self.textMove)
+                    if match:
+                        self.infocomRepeatCount = int(match.group(0)) - 1
+            else:
+                for word in ["right", "east"]:
+                    if word in self.textMove:
+                        self.keysPressed["right"] = True
+                        self.keysPressed["left"] = False
+                for word in ["left", "west"]:
+                    if word in self.textMove:
+                        self.keysPressed["right"] = False
+                        self.keysPressed["left"] = True
+                for word in ["up", "jump"]:
+                    if word in self.textMove:
+                        self.keysPressed["jump"] = True
+            
         for e in pygame.event.get():
             if e.type == KEYDOWN:
                 if e.key == pygame.K_t:
@@ -1501,22 +1537,16 @@ def loadCavern(cavern, screen):
                         lastGuardian.setEndPos(screenx, screeny)
     screen.setBackgroundColor(bgColor)
 
-def main():
-    # load the specified cavern or the default, falling back to default if specified but not found
+def processCmdLineArgs(events):
     cavernFound = False
-    defaultCavern = "centralCavern"
-    if len(sys.argv) >= 2:
-        if sys.argv[1] not in caverns.keys():
-            print("Cavern", sys.argv[1], " is not known")
-            cavernFound = False
+    for arg in sys.argv[1:]:
+        if arg[0:2] == "--":
+            if arg[2:] == "infocom":
+                events.infocomMode = True
         else:
-            print("Loading", sys.argv[1])
-            cavern = caverns[sys.argv[1]]
-            cavernFound = True
-    if cavernFound == False:
-        # default to the classic central cavern
-        cavern = caverns[defaultCavern]
+            return arg
 
+def main():
     # screen (h x w): 6.802 x 9.071 (25% larger height and width than inner game area)
     # inner game area (h x w): 5.419 x 7.255
     # top/bottom border height: 0.672 (10% of screen height)
@@ -1527,11 +1557,21 @@ def main():
     # high score, lives height: 1.352
     
     events = Events()
+
+    # load the specified cavern or the default, falling back to default if specified but not found
+    defaultCavern = "centralCavern"
+    userCavern = processCmdLineArgs(events)
+    if userCavern not in caverns.keys():
+        print("Cavern", userCavern, " is not known")
+        cavern = caverns[defaultCavern]
+    else:
+        print("Loading", userCavern)
+        cavern = caverns[userCavern]
+
     screen = Screen(640, 320, cavern[1])
     player = Player()
     sound = Sound()
     scale = 0.7
-
     game = ["centralCavern", "coldRoom", "theMenagerie"]
     levelNumber = 0
     loadCavern(caverns[game[levelNumber]], screen)
