@@ -120,15 +120,16 @@ class Events:
         self.infocomMode = False
         self.infocomRepeatCount = 0
 
-    def check(self):
+    def check(self, willy):
         self.eventCount += 1
 
         if self.infocomMode == True:
             self.keysPressed["left"] = False
             self.keysPressed["right"] = False
             self.keysPressed["jump"] = False
+            self.keysPressed["restart"] = False
             print("repeat count:", self.infocomRepeatCount, "event count:", self.eventCount)
-            if self.eventCount % 10 == 0:
+            if self.eventCount % 18 == 0:
                 if self.infocomRepeatCount > 0:
                     self.infocomRepeatCount -= 1
                 else:
@@ -140,18 +141,22 @@ class Events:
                     match = re.search(r'\d', self.textMove)
                     if match:
                         self.infocomRepeatCount = int(match.group(0)) - 1
-            else:
-                for word in ["right", "east"]:
+            elif willy.isJumping() == False:
+                for word in ["right", "east", "e", "r"]:
                     if word in self.textMove:
                         self.keysPressed["right"] = True
                         self.keysPressed["left"] = False
-                for word in ["left", "west"]:
+                for word in ["left", "west", "w", "l"]:
                     if word in self.textMove:
                         self.keysPressed["right"] = False
                         self.keysPressed["left"] = True
-                for word in ["up", "jump"]:
+                for word in ["up", "jump", "u"]:
                     if word in self.textMove:
                         self.keysPressed["jump"] = True
+                        self.infocomRepeatCount *= 4
+                for word in ["restart", "die"]:
+                    if word in self.textMove:
+                        self.keysPressed["restart"] = True
             
         for e in pygame.event.get():
             if e.type == KEYDOWN:
@@ -735,7 +740,7 @@ class Brick(SolidStandableObject):
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class Plant(StationaryObject):
-    def __init__(self, x, y, scale, name="Floor"):
+    def __init__(self, x, y, scale, name="Plant"):
         # print("Creating Plant: ", name)
         StationaryObject.__init__(self, x, y, name)
         self.type = "Plant"
@@ -752,11 +757,6 @@ class Plant(StationaryObject):
             newWidth = int(plantImgWidth * scale)
             picture = pygame.transform.scale(self.plantImg[count], (newWidth, newHeight))
             self.plantImg[count] = picture
-            (plantImgWidth,plantImgHeight) = self.plantImg[count].get_rect().size
-            newHeight = int(plantImgHeight * scale)
-            newWidth = int(plantImgWidth * scale)
-            picture = pygame.transform.scale(self.plantImg[count], (newWidth,newHeight))
-            self.plantImg[count] = picture
             self.width = newWidth
             self.height = newHeight
             # print("Plant Width: ", self.width)
@@ -765,6 +765,62 @@ class Plant(StationaryObject):
 
     def display(self, screen):
         image = self.plantImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
+class SpiderLine(StationaryObject):
+    def __init__(self, x, y, scale, name="SpiderLine"):
+        # print("Creating SpiderLine: ", name)
+        StationaryObject.__init__(self, x, y, name)
+        self.type = "SpiderLine"
+        # print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.spiderLineImg = [
+            pygame.image.load('spiderline.png'),
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.spiderLineImg)
+        for count in range(0, numImages):
+            (spiderLineImgWidth, spiderLineImgHeight) = self.spiderLineImg[count].get_rect().size
+            newHeight = int(spiderLineImgHeight * scale)
+            newWidth = int(spiderLineImgWidth * scale)
+            picture = pygame.transform.scale(self.spiderLineImg[count], (newWidth, newHeight))
+            self.spiderLineImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            # print("SpiderLine Width: ", self.width)
+            # print("SpiderLine Height: ", self.height)
+        self.image = self.spiderLineImg[0]
+
+    def display(self, screen):
+        image = self.spiderLineImg[0]
+        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+
+class Spider(StationaryObject):
+    def __init__(self, x, y, scale, name="Spider"):
+        # print("Creating Spider: ", name)
+        StationaryObject.__init__(self, x, y, name)
+        self.type = "Spider"
+        # print("x,y = ", self.xpos, ",", self.ypos)
+        # sprite
+        self.spiderImg = [
+            pygame.image.load('spider.png'),
+        ]
+        # scale the sprites up to larger
+        numImages = len(self.spiderImg)
+        for count in range(0, numImages):
+            (spiderImgWidth, spiderImgHeight) = self.spiderImg[count].get_rect().size
+            newHeight = int(spiderImgHeight * scale)
+            newWidth = int(spiderImgWidth * scale)
+            picture = pygame.transform.scale(self.spiderImg[count], (newWidth, newHeight))
+            self.spiderImg[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+            # print("Spider Width: ", self.width)
+            # print("Spider Height: ", self.height)
+        self.image = self.spiderImg[0]
+
+    def display(self, screen):
+        image = self.spiderImg[0]
         screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
 
 class Key(StationaryObject):
@@ -983,6 +1039,9 @@ class Willy(MovingObject):
             print("Willy Width: ", self.width)
             print("Willy Height: ", self.height)
 
+    def isJumping(self):
+        return self.willyJump > 0
+            
     def getJumpHeight(self, jumpPosition, jumpDistance, jumpHeight):
         jumpPosition //= 2
         # print("  jumpPosition: ", jumpPosition)
@@ -1179,9 +1238,13 @@ def update(clock, player, events, keys, guardians, willy, screen, sound, floors,
     if events.keysPressed["music"]:
         print("toggle music")
         sound.toggleMainMusic()
+    if events.keysPressed["dev1"]:
+        print("dev1 - skip level")
+        return "levelComplete"
     if events.keysPressed["restart"]:
         print("restart")
         player.lives = 3
+        print("Lives:", player.lives)
         restartLevel(clock, screen, events, player, keys, floors, obstacles, guardians, willy, sound, portal)
     screen.setBackgroundColor(screen.backgroundColor)
     for floor in floors:
@@ -1270,8 +1333,10 @@ B = 0x02 # brick
 C = 0x03 # crumbling floor
 F = 0x06 # floor
 I = 0x09 # ice
-K = 0x0A # key
+K = 0x0B # key
+L = 0x0C # spider line
 P = 0x10 # plant
+S = 0x13 # spider
 T = 0x14 # TrumpetNose start location
 U = 0x15 # TrumpetNose end location
 V = 0x16 # left conveyor
@@ -1329,18 +1394,18 @@ caverns = {
     ],
     "theMenagerie": [
         [
-            [B,0,0,0,0,K,0,0,0,P,0,0,0,K,0,0,P,0,0,0,P,0,0,0,K,0,0,0,P,0,0,B],
-            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,0,0,0,0,K,0,0,0,S,0,0,0,K,0,0,L,0,0,0,S,0,0,0,K,0,0,0,S,0,0,B],
+            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,S,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,T,0,0,0,0,0,0,0,0,0,0,0,0,0,U,0,T,0,0,0,0,0,0,0,0,0,0,0,0,U,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,F,F,F,F,F,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,F,F,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,B],
-            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-            [B,0,0,0,0,0,0,V,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-            [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,F,F,B],
-            [B,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
+            [B,L,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,L,0,0,0,0,0,V,V,V,V,V,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
+            [B,L,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,F,F,B],
+            [B,S,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
             [B,0,0,0,0,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
             [B,0,W,0,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,U,F,F,F,F,F,F,F,F,F,F,F,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
@@ -1490,7 +1555,13 @@ def loadCavern(cavern, screen):
                 obstacles.append(Ice(screenx, screeny, screen.scale, cellName))
             elif cellContents == P:
                 cellName = "plant-" + str(cellx) + "-" + str(celly)
-                obstacles.append(Plant(screenx, screeny, screen.scale * 0.7, cellName))
+                obstacles.append(Plant(screenx, screeny, screen.scale * 1.0, cellName))
+            elif cellContents == L:
+                cellName = "spiderline-" + str(cellx) + "-" + str(celly)
+                obstacles.append(SpiderLine(screenx, screeny, screen.scale, cellName))
+            elif cellContents == S:
+                cellName = "spider-" + str(cellx) + "-" + str(celly)
+                obstacles.append(Spider(screenx, screeny, screen.scale, cellName))
             elif cellContents == V:
                 cellName = "leftconveyor-" + str(cellx) + "-" + str(celly)
                 newconveyor = LeftConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
@@ -1585,7 +1656,7 @@ def main():
     # sound.playTitleTune()
 
     while running and player.lives > 0:
-        running = events.check()
+        running = events.check(willy)
         if update(clock, player, events, keys, guardians, willy, screen, sound, floors, obstacles, portal):
             # player just completed a level
             levelNumber += 1
