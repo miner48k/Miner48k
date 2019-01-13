@@ -326,6 +326,9 @@ class Screen:
         coord_x = x * self.cellWidth
         coord_y = y * self.cellHeight
         return (coord_x,coord_y)
+
+    def getScale(self, width):
+        return self.cellWidth / width
     
     def setBackgroundColor(self, color):
         # print("setting background color to ", color, self.RGB[color])
@@ -349,14 +352,15 @@ class Screen:
         willy_right = willyx + willy.width
         willy_top = willyy
         willy_bottom = willyy + willy.height
-        # print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
+        print("willy x,y: (", willy.xpos, ",", willy.ypos, ")")
         # print("willy bounds: (", willy_left, ",", willy_top, ") to (", willy_right, ",", willy_bottom, ")")
 
-        collisionWatchList = ["brick-0-15"]
+        collisionWatchList = [""]
         collisions = []
 
         for object in objects:
             if object.collidable == True:
+                # print("getting next object: ", object.name)
                 object_left = object.xpos
                 object_right = object.xpos + object.width
                 object_top = object.ypos
@@ -364,29 +368,43 @@ class Screen:
                 horizontal = False
                 vertical = False
                 collision = False
+                # print("willy: (", willy.xpos, ",", willy.ypos, ")")
                 # print("object: ", object.name, ": (", object.xpos, ",", object.ypos, ")")
-                # print("          (", object_left, ",", object_top, ") to (", object_right, ",", object_bottom, ")")
+                # print("willy  (L,R,T,B): ", willy_left, willy_right, willy_top, willy_bottom)
+                # print("object (L,R,T,B): ", object_left, object_right, object_top, object_bottom)
                 if willy_right - 1 >= object_left and willy_right <= object_right:
                     horizontal = True
+                    # print("horizontal: true")
                 if willy_left <= object_right and willy_left >= object_left - 5:
                     horizontal = True
+                    # print("horizontal: true")
                 if willy_bottom >= object_top and willy_bottom <= object_bottom:
                     # give a little more tolerance on guardians
                     if isinstance(object, Guardian):
                         if willy_bottom >= object_top + 5:
                             vertical = True
+                            # print("vertical: true")
                     else:
                         vertical = True
+                        # print("vertical: true")
                 if willy_top <= object_bottom and willy_top >= object_top:
                     # give a little more tolerance on guardians
                     if isinstance(object, Guardian):
                         if willy_bottom >= object_bottom - 5:
                             vertical = True
+                            # print("vertical: true")
                     else:
                         vertical = True
+                        # print("vertical: true")
+                # if horizontal:
+                #     print("horizontal collision with", object.name)
+                # if vertical:
+                #     print("vertical collision with", object.name)
                 if horizontal == True and vertical == True:
                     collision = True
+                    # print("collision: true")
                 if collision == True:
+                    # print("collision with object")
                     self.collisionCount += 1
                     if isinstance(object, SolidStandableObject):
                         if willy_left <= object_right and willy_right >= object_right and willy_bottom >= object_top + 10:
@@ -397,7 +415,7 @@ class Screen:
                             collisions.append(Collision(object, "blockedright"))
                             continue
                     if isinstance(object, StandableObject) and object.standable == True:
-                        if object.name in collisionWatchList:
+                        if object.name in collisionWatchList or collisionWatchList[0] == "*":
                             print("willy  (L,R,T,B): ", willy_left, willy_right, willy_top, willy_bottom)
                             print("object (L,R,T,B): ", object_left, object_right, object_top, object_bottom)
                             print("WB (", willy_bottom, ") needs to be in range ", object_top - 5, " to ", object_top + 5)
@@ -431,8 +449,14 @@ class Object:
         self.type = "Object"
         self.name = name
         self.collidable = False
-        self.image = pygame.image.load('empty.png')
+        self.images = [  
+            pygame.image.load('empty.png'),
+        ]
+        self.image = self.images[0]
         self.color = color
+        self.setColor(color)
+        self.width = 0
+        self.height = 0
 
     def move(self, screen):
         pass
@@ -442,12 +466,28 @@ class Object:
         self.ypos = self.startypos
 
     def setColor(self, color):
-        # print("setColor ", self.name, color)
-        self.image = Screen.colorImage(self.image, color)
-        return
+        # print("setColor(", color, ") called on", self.name)
+        for n in range(0,len(self.images)):
+            self.images[n] = Screen.colorImage(self.images[n], color)
+
+    def scaleUp(self, scaleFactor):
+        # scale our graphics up to larger
+        numImages = len(self.images)
+        for count in range(0, numImages):
+            (portalImgWidth, portalImgHeight) = self.images[count].get_rect().size
+            newHeight = int(portalImgHeight * scaleFactor)
+            newWidth = int(portalImgWidth * scaleFactor)
+            picture = pygame.transform.scale(self.images[count], (newWidth, newHeight))
+            self.images[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+
+    def getWidth(self):
+        (width, height) = self.images[0].get_rect().size
+        return width
 
     def display(self, screen):
-        pass
+        screen.DISPLAYSURF.blit(self.images[0], (self.xpos,self.ypos))
     
 class MovingObject(Object):
     def __init__(self, start_x, start_y, name="MovingObject"):
@@ -471,30 +511,14 @@ class Portal(StationaryObject):
         StationaryObject.__init__(self, x, y, name)
         self.type = "Portal"
         
-        self.portalImg = [
+        self.images = [
             pygame.image.load('portal_start.png'),
             pygame.image.load('portal_end.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.portalImg)
-        for count in range(0, numImages):
-            (portalImgWidth, portalImgHeight) = self.portalImg[count].get_rect().size
-            newHeight = int(portalImgHeight * scale)
-            newWidth = int(portalImgWidth * scale)
-            picture = pygame.transform.scale(self.portalImg[count], (newWidth, newHeight))
-            self.portalImg[count] = picture
-            (portalImgWidth,portalImgHeight) = self.portalImg[count].get_rect().size
-            newHeight = int(portalImgHeight * scale)
-            newWidth = int(portalImgWidth * scale)
-            picture = pygame.transform.scale(self.portalImg[count], (newWidth,newHeight))
-            self.portalImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Portal Width: ", self.width)
-            # print("Portal Height: ", self.height)
+        self.scaleUp(scale)
         self.displayCount = 0
         self.imageNum = 0
-        self.image = self.portalImg[self.imageNum]
+        self.image = self.images[self.imageNum]
         self.open = False
         self.collidable = True
 
@@ -505,7 +529,7 @@ class Portal(StationaryObject):
                 self.imageNum = 0
             else:
                 self.imageNum = 1
-            self.image = self.portalImg[self.imageNum]
+            self.image = self.images[self.imageNum]
             if self.displayCount == 10:
                 self.displayCount = 0
 
@@ -527,45 +551,22 @@ class Floor(StandableObject):
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
-        self.floorImg = [
+        self.images = [
             pygame.image.load('floor_1.png'), # red
         ]
-        # scale the sprites up to larger
-        numImages = len(self.floorImg)
-        for count in range(0, numImages):
-            (floorImgWidth, floorImgHeight) = self.floorImg[count].get_rect().size
-            newHeight = int(floorImgHeight * scale)
-            newWidth = int(floorImgWidth * scale)
-            picture = pygame.transform.scale(self.floorImg[count], (newWidth, newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.floorImg[count] = picture
-            (floorImgWidth,floorImgHeight) = self.floorImg[count].get_rect().size
-            newHeight = int(floorImgHeight * scale)
-            newWidth = int(floorImgWidth * scale)
-            picture = pygame.transform.scale(self.floorImg[count], (newWidth,newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.floorImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Floor Width: ", self.width)
-            # print("Floor Height: ", self.height)
-        self.image = self.floorImg[0]
+        self.scaleUp(scale)
+        self.image = self.images[0]
 
     def restart(self):
         pass
 
-    def display(self, screen):
-        image = self.floorImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
-
 class Conveyor(StandableObject):
     def __init__(self, x, y, scale, name="Conveyor", color="none"):
         StandableObject.__init__(self, x, y, name, color)
-        print("x: ", x, ", y: ", y, ", scale: ", scale, ", name: ", name)
+        # print("x: ", x, ", y: ", y, ", scale: ", scale, ", name: ", name)
         self.conveyorDirection = "none"
         self.conveyorPosition = 0
-        # sprite
-        self.conveyorImg = [
+        self.images = [
             pygame.image.load('conveyor_1.png'),
             pygame.image.load('conveyor_2.png'),
             pygame.image.load('conveyor_3.png'),
@@ -575,26 +576,13 @@ class Conveyor(StandableObject):
             pygame.image.load('conveyor_7.png'),
             pygame.image.load('conveyor_8.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.conveyorImg)
-        for count in range(0, numImages):
-            (conveyorImgWidth, conveyorImgHeight) = self.conveyorImg[count].get_rect().size
-            newHeight = int(conveyorImgHeight * scale)
-            newWidth = int(conveyorImgWidth * scale)
-            picture = pygame.transform.scale(self.conveyorImg[count], (newWidth, newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.conveyorImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Conveyor Width: ", self.width)
-            # print("Conveyor Height: ", self.height)
-        self.image = self.conveyorImg[0]
+        self.scaleUp(scale)
 
     def restart(self):
         pass
 
     def display(self, screen):
-        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
+        screen.DISPLAYSURF.blit(self.images[0], (self.xpos,self.ypos))
         
 class LeftConveyor(Conveyor):
     def __init__(self, x, y, scale, name="Conveyor", color="none"):
@@ -605,9 +593,9 @@ class LeftConveyor(Conveyor):
 
     def move(self, screen):
         self.conveyorPosition += 1
-        if self.conveyorPosition == len(self.conveyorImg):
+        if self.conveyorPosition == len(self.images):
             self.conveyorPosition = 0
-        self.image = self.conveyorImg[self.conveyorPosition]
+        self.image = self.images[self.conveyorPosition]
 
 class RightConveyor(Conveyor):
     def __init__(self, x, y, scale, name="Conveyor", color="none"):
@@ -629,7 +617,7 @@ class CrumblingFloor(StandableObject):
         self.type = "CrumblingFloor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
-        self.floorImg = [
+        self.images = [
             pygame.image.load('crumble_1.png'),
             pygame.image.load('crumble_2.png'),
             pygame.image.load('crumble_3.png'),
@@ -639,27 +627,9 @@ class CrumblingFloor(StandableObject):
             pygame.image.load('crumble_7.png'),
             pygame.image.load('crumble_8.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.floorImg)
-        for count in range(0, numImages):
-            (floorImgWidth, floorImgHeight) = self.floorImg[count].get_rect().size
-            newHeight = int(floorImgHeight * scale)
-            newWidth = int(floorImgWidth * scale)
-            picture = pygame.transform.scale(self.floorImg[count], (newWidth, newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.floorImg[count] = picture
-            (floorImgWidth,floorImgHeight) = self.floorImg[count].get_rect().size
-            newHeight = int(floorImgHeight * scale)
-            newWidth = int(floorImgWidth * scale)
-            picture = pygame.transform.scale(self.floorImg[count], (newWidth,newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.floorImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Floor Width: ", self.width)
-            # print("Floor Height: ", self.height)
+        self.scaleUp(scale)
         self.crumbleLevel = 0
-        self.image = self.floorImg[self.crumbleLevel]
+        self.image = self.images[self.crumbleLevel]
 
     def crumble(self):
         if self.crumbleLevel == 0:
@@ -675,7 +645,7 @@ class CrumblingFloor(StandableObject):
 
     def display(self, screen):
         if self.crumbleLevel < 8:
-            image = self.floorImg[self.crumbleLevel]
+            image = self.images[self.crumbleLevel]
             screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
         # otherwise just don't show anything
 
@@ -685,20 +655,10 @@ class Ice(StationaryObject):
         StationaryObject.__init__(self, x, y, name)
         self.type = "Ice"
         # sprite
-        self.image = pygame.image.load('icicle.png')
-        # scale the sprites up to larger
-        (iceImgWidth, iceImgHeight) = self.image.get_rect().size
-        newHeight = int(iceImgHeight * scale)
-        newWidth = int(iceImgWidth * scale)
-        picture = pygame.transform.scale(self.image, (newWidth, newHeight))
-        self.image = picture
-        self.width = newWidth
-        self.height = newHeight
-        # print("Ice Width: ", self.width)
-        # print("Ice Height: ", self.height)
-
-    def display(self, screen):
-        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
+        self.images = [
+            pygame.image.load('icicle.png'),
+        ]
+        self.scaleUp(scale)
 
 class SolidStandableObject(StandableObject):
     def __init__(self, x, y, scale, name="SolidStandable", color="none"):
@@ -711,33 +671,11 @@ class Brick(SolidStandableObject):
         self.type = "Floor"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
-        self.brickImg = [
+        self.images = [
             pygame.image.load('brick_1.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.brickImg)
-        for count in range(0, numImages):
-            (brickImgWidth, brickImgHeight) = self.brickImg[count].get_rect().size
-            newHeight = int(brickImgHeight * scale)
-            newWidth = int(brickImgWidth * scale)
-            picture = pygame.transform.scale(self.brickImg[count], (newWidth, newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.brickImg[count] = picture
-            (brickImgWidth,brickImgHeight) = self.brickImg[count].get_rect().size
-            newHeight = int(brickImgHeight * scale)
-            newWidth = int(brickImgWidth * scale)
-            picture = pygame.transform.scale(self.brickImg[count], (newWidth,newHeight))
-            picture = Screen.colorImage(picture, color)
-            self.brickImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Brick Width: ", self.width)
-            # print("Brick Height: ", self.height)
-        self.image = self.brickImg[0]
-
-    def display(self, screen):
-        image = self.brickImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        self.scaleUp(scale)
+        self.image = self.images[0]
 
 class Plant(StationaryObject):
     def __init__(self, x, y, scale, name="Plant"):
@@ -746,26 +684,11 @@ class Plant(StationaryObject):
         self.type = "Plant"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
-        self.plantImg = [
+        self.images = [
             pygame.image.load('plant_1.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.plantImg)
-        for count in range(0, numImages):
-            (plantImgWidth, plantImgHeight) = self.plantImg[count].get_rect().size
-            newHeight = int(plantImgHeight * scale)
-            newWidth = int(plantImgWidth * scale)
-            picture = pygame.transform.scale(self.plantImg[count], (newWidth, newHeight))
-            self.plantImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Plant Width: ", self.width)
-            # print("Plant Height: ", self.height)
-        self.image = self.plantImg[0]
-
-    def display(self, screen):
-        image = self.plantImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        self.scaleUp(scale)
+        self.image = self.images[0]
 
 class SpiderLine(StationaryObject):
     def __init__(self, x, y, scale, name="SpiderLine"):
@@ -774,26 +697,11 @@ class SpiderLine(StationaryObject):
         self.type = "SpiderLine"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
-        self.spiderLineImg = [
+        self.images = [
             pygame.image.load('spiderline.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.spiderLineImg)
-        for count in range(0, numImages):
-            (spiderLineImgWidth, spiderLineImgHeight) = self.spiderLineImg[count].get_rect().size
-            newHeight = int(spiderLineImgHeight * scale)
-            newWidth = int(spiderLineImgWidth * scale)
-            picture = pygame.transform.scale(self.spiderLineImg[count], (newWidth, newHeight))
-            self.spiderLineImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("SpiderLine Width: ", self.width)
-            # print("SpiderLine Height: ", self.height)
-        self.image = self.spiderLineImg[0]
-
-    def display(self, screen):
-        image = self.spiderLineImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        self.scaleUp(scale)
+        self.image = self.images[0]
 
 class Spider(StationaryObject):
     def __init__(self, x, y, scale, name="Spider"):
@@ -802,26 +710,10 @@ class Spider(StationaryObject):
         self.type = "Spider"
         # print("x,y = ", self.xpos, ",", self.ypos)
         # sprite
-        self.spiderImg = [
+        self.images = [
             pygame.image.load('spider.png'),
         ]
-        # scale the sprites up to larger
-        numImages = len(self.spiderImg)
-        for count in range(0, numImages):
-            (spiderImgWidth, spiderImgHeight) = self.spiderImg[count].get_rect().size
-            newHeight = int(spiderImgHeight * scale)
-            newWidth = int(spiderImgWidth * scale)
-            picture = pygame.transform.scale(self.spiderImg[count], (newWidth, newHeight))
-            self.spiderImg[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("Spider Width: ", self.width)
-            # print("Spider Height: ", self.height)
-        self.image = self.spiderImg[0]
-
-    def display(self, screen):
-        image = self.spiderImg[0]
-        screen.DISPLAYSURF.blit(image, (self.xpos,self.ypos))
+        self.scaleUp(scale)
 
 class Key(StationaryObject):
     def __init__(self, start_x, start_y, scale, name="Key"):
@@ -875,6 +767,8 @@ class Key(StationaryObject):
 
 class Guardian(MovingObject):
     def __init__(self, start_x, start_y, name = "Guardian"):
+        self.imagesLeft = []
+        self.imagesRight = []
         MovingObject.__init__(self, start_x, start_y, name)
         self.type = "Guardian"
         self.xpos = start_x
@@ -884,6 +778,30 @@ class Guardian(MovingObject):
         (self.width, self.height) = self.image.get_rect().size
         self.direction = "right"
         self.collidable = True
+
+    def scaleUp(self, scale):
+        # scale the sprites up to larger
+        numImages = len(self.imagesRight)
+        for count in range(0, numImages):
+            (imgWidth, imgHeight) = self.imagesRight[count].get_rect().size
+            newHeight = int(imgHeight * scale)
+            newWidth = int(imgWidth * scale)
+            picture = pygame.transform.scale(self.imagesRight[count], (newWidth, newHeight))            
+            self.imagesRight[count] = picture
+            (imgWidth,imgHeight) = self.imagesLeft[count].get_rect().size
+            newHeight = int(imgHeight * scale)
+            newWidth = int(imgWidth * scale)
+            picture = pygame.transform.scale(self.imagesLeft[count], (newWidth,newHeight))
+            self.imagesLeft[count] = picture
+            self.width = newWidth
+            self.height = newHeight
+
+    def setColor(self, color):
+        # print("setColor(", color, ") called on", self.name)
+        for n in range(0,len(self.imagesLeft)):
+            self.imagesLeft[n] = Screen.colorImage(self.imagesLeft[n], color)
+        for n in range(0,len(self.imagesRight)):
+            self.imagesRight[n] = Screen.colorImage(self.imagesRight[n], color)
 
     def move(self, screen):
         print("self.xpos: ", self.xpos, " vs ", screen.xboundary_left)
@@ -896,17 +814,21 @@ class Guardian(MovingObject):
         elif self.direction == "left":
             self.xpos -= 10
 
+    def setEndPos(self, screenx, screeny):
+        print("Updating", self.name, "endPosX")
+        self.endPosX = screenx
+        
     def display(self, screen):
         screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))
         return
 
 class TrumpetNose(Guardian):
-    def __init__(self, start_x, start_y, willyScale, name="TrumpetNose"):
+    def __init__(self, start_x, start_y, scale, name="TrumpetNose"):
         Guardian.__init__(self, start_x, start_y, name)
         self.subtype = "TrumpetNose"
         # print("Creating TrumpetNose: ", name)
         # moving left animation sprites
-        self.trumpetNoseImgLeft = [
+        self.imagesLeft = [
             pygame.image.load('trumpetnose_left_1.png'),
             pygame.image.load('trumpetnose_left_2.png'),
             pygame.image.load('trumpetnose_left_3.png'),    
@@ -914,45 +836,69 @@ class TrumpetNose(Guardian):
         ]
 
         # moving right animation sprites
-        self.trumpetNoseImgRight = [
+        self.imagesRight = [
             pygame.image.load('trumpetnose_right_1.png'),
             pygame.image.load('trumpetnose_right_2.png'),
             pygame.image.load('trumpetnose_right_3.png'),    
             pygame.image.load('trumpetnose_right_4.png')
         ]
-
-        # scale the sprites up to larger
-        numImages = len(self.trumpetNoseImgRight)
-        for count in range(0, numImages):
-            (trumpetNoseImgWidth, trumpetNoseImgHeight) = self.trumpetNoseImgRight[count].get_rect().size
-            newHeight = int(trumpetNoseImgHeight * willyScale)
-            newWidth = int(trumpetNoseImgWidth * willyScale)
-            picture = pygame.transform.scale(self.trumpetNoseImgRight[count], (newWidth, newHeight))            
-            self.trumpetNoseImgRight[count] = picture
-            (trumpetNoseImgWidth,trumpetNoseImgHeight) = self.trumpetNoseImgLeft[count].get_rect().size
-            newHeight = int(trumpetNoseImgHeight * willyScale)
-            newWidth = int(trumpetNoseImgWidth * willyScale)
-            picture = pygame.transform.scale(self.trumpetNoseImgLeft[count], (newWidth,newHeight))
-            self.trumpetNoseImgLeft[count] = picture
-            self.width = newWidth
-            self.height = newHeight
-            # print("TrumpetNose Width: ", self.width)
-            # print("TrumpetNose Height: ", self.height)
+        self.scaleUp(scale)
         self.walkPos = 0
         self.direction = "right"
         self.endPosX = start_x + 100
         self.endPosY = start_y
 
-    def setEndPos(self, screenx, screeny):
-        print("Updating TrumpetNose endPosX")
-        self.endPosX = screenx
-        
     def move(self, screen):
         if self.direction == "left":
-            self.image = self.trumpetNoseImgLeft[self.walkPos]
+            self.image = self.imagesLeft[self.walkPos]
             self.xpos -= 4
         else: # direction == "right"
-            self.image = self.trumpetNoseImgRight[self.walkPos]
+            self.image = self.imagesRight[self.walkPos]
+            self.xpos += 4
+        self.walkPos += 1 # for animation
+        if self.walkPos == 4:
+            self.walkPos = 0
+        if self.xpos <= self.startxpos or self.xpos >= self.endPosX:
+            if self.direction == "left":
+                self.direction = "right"
+            else:
+                self.direction = "left"
+        return
+
+    def display(self, screen):
+        screen.DISPLAYSURF.blit(self.image, (self.xpos,self.ypos))       
+
+class Ostrich(Guardian):
+    def __init__(self, start_x, start_y, scale, name="Ostrich"):
+        Guardian.__init__(self, start_x, start_y, name)
+        self.subtype = "Ostrich"
+        # moving left animation sprites
+        self.imagesLeft = [
+            pygame.image.load('ostrich_left_1.png'),
+            pygame.image.load('ostrich_left_2.png'),
+            pygame.image.load('ostrich_left_3.png'),    
+            pygame.image.load('ostrich_left_4.png')
+        ]
+
+        # moving right animation sprites
+        self.imagesRight = [
+            pygame.image.load('ostrich_right_1.png'),
+            pygame.image.load('ostrich_right_2.png'),
+            pygame.image.load('ostrich_right_3.png'),    
+            pygame.image.load('ostrich_right_4.png')
+        ]
+        self.scaleUp(scale)
+        self.walkPos = 0
+        self.direction = "right"
+        self.endPosX = start_x + 100
+        self.endPosY = start_y
+
+    def move(self, screen):
+        if self.direction == "left":
+            self.image = self.imagesLeft[self.walkPos]
+            self.xpos -= 4
+        else: # direction == "right"
+            self.image = self.imagesRight[self.walkPos]
             self.xpos += 4
         self.walkPos += 1 # for animation
         if self.walkPos == 4:
@@ -1335,6 +1281,8 @@ F = 0x06 # floor
 I = 0x09 # ice
 K = 0x0B # key
 L = 0x0C # spider line
+N = 0x0E # Ostrich end location
+O = 0x0F # Ostrich start location
 P = 0x10 # plant
 S = 0x13 # spider
 T = 0x14 # TrumpetNose start location
@@ -1397,7 +1345,7 @@ caverns = {
             [B,0,0,0,0,K,0,0,0,S,0,0,0,K,0,0,L,0,0,0,S,0,0,0,K,0,0,0,S,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,S,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
-            [B,T,0,0,0,0,0,0,0,0,0,0,0,0,0,U,0,T,0,0,0,0,0,0,0,0,0,0,0,0,U,B],
+            [B,O,0,0,0,0,0,0,0,0,0,0,0,0,0,N,0,O,0,0,0,0,0,0,0,0,0,0,0,0,N,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,F,F,F,F,F,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,C,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
@@ -1407,7 +1355,7 @@ caverns = {
             [B,L,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,F,F,B],
             [B,S,0,0,0,0,0,0,0,0,0,0,0,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
             [B,0,0,0,0,F,F,F,F,F,F,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,Z,Z,B],
-            [B,0,W,0,0,0,0,0,0,0,0,T,0,0,0,0,0,0,0,U,F,F,F,F,F,F,F,F,F,F,F,B],
+            [B,0,W,0,0,0,0,0,0,0,0,O,0,0,0,0,0,0,K,N,F,F,F,F,F,F,F,F,F,F,F,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B,B],
         ],
@@ -1438,7 +1386,7 @@ caverns = {
         "red",   # floors
         "green", # conveyors
     ],
-    "testCavern2": [
+    "testCavern": [
         [
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
             [B,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,B],
@@ -1534,28 +1482,46 @@ def loadCavern(cavern, screen):
     bgColor = cavern[1]
     floorColor = cavern[2]
     conveyorColor = cavern[3]
+    colorSequenceNum = 0
+    colorSequence = ["magenta", "red", "green", "blue", "yellow"]
 
     for celly in range(0,16):
         for cellx in range(0,32):
             cellContents = cavernMap[celly][cellx]
-            print("handling map: ", cellx, celly, " = ", cellContents)
+            # print("handling map: ", cellx, celly, " = ", cellContents)
             (screenx,screeny) = screen.cellToCoords(cellx, celly)
             if cellContents == B:
                 cellName = "brick-" + str(cellx) + "-" + str(celly)
-                newbrick = Brick(screenx, screeny, screen.scale * 0.7, cellName)
-                newbrick.setColor(floorColor)
+                newbrick = Brick(screenx, screeny, screen.scale * 1.1, cellName)
+                # newbrick.setColor(floorColor)
                 floors.append(newbrick)
             elif cellContents == F:
                 cellName = "floor-" + str(cellx) + "-" + str(celly)
-                newfloor = Floor(screenx, screeny, screen.scale * 0.7, cellName, floorColor)
+                newfloor = Floor(screenx, screeny, screen.scale * 1.1, cellName, floorColor)
                 newfloor.setColor(floorColor)
                 floors.append(newfloor)
             elif cellContents == I:
                 cellName = "ice-" + str(cellx) + "-" + str(celly)
                 obstacles.append(Ice(screenx, screeny, screen.scale, cellName))
+            elif cellContents == O:
+                cellName = "ostrich-" + str(cellx) + "-" + str(celly)
+                newOstrich = Ostrich(screenx, screeny, screen.scale, cellName)
+                newOstrich.setColor(colorSequence[colorSequenceNum % len(colorSequence)])
+                colorSequenceNum += 1
+                guardians.append(newOstrich)
+            elif cellContents == N:
+                lastOstrich = None
+                for guardian in guardians:
+                    print("Looking for Ostrich: ", guardian.name)
+                    if guardian.subtype == "Ostrich":
+                        lastOstrich = guardian
+                print("last guardian found was", lastOstrich, "named", lastOstrich.name)
+                if lastOstrich != None:
+                    print("setting", lastOstrich.name, " end position to: (", cellx, ",", celly, ")")
+                    lastOstrich.setEndPos(screenx, screeny)
             elif cellContents == P:
                 cellName = "plant-" + str(cellx) + "-" + str(celly)
-                obstacles.append(Plant(screenx, screeny, screen.scale * 1.0, cellName))
+                obstacles.append(Plant(screenx, screeny, screen.scale, cellName))
             elif cellContents == L:
                 cellName = "spiderline-" + str(cellx) + "-" + str(celly)
                 obstacles.append(SpiderLine(screenx, screeny, screen.scale, cellName))
@@ -1564,17 +1530,17 @@ def loadCavern(cavern, screen):
                 obstacles.append(Spider(screenx, screeny, screen.scale, cellName))
             elif cellContents == V:
                 cellName = "leftconveyor-" + str(cellx) + "-" + str(celly)
-                newconveyor = LeftConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
+                newconveyor = LeftConveyor(screenx, screeny, screen.scale * 1.1, cellName, conveyorColor)
                 newconveyor.setColor(conveyorColor)
                 floors.append(newconveyor)
             elif cellContents == X:
                 cellName = "rightconveyor-" + str(cellx) + "-" + str(celly)
-                newconveyor = RightConveyor(screenx, screeny, screen.scale, cellName, conveyorColor)
+                newconveyor = RightConveyor(screenx, screeny, screen.scale * 1.1, cellName, conveyorColor)
                 newconveyor.setColor(conveyorColor)
                 floors.append(newconveyor)
             elif cellContents == C:
                 cellName = "crumble-" + str(cellx) + "-" + str(celly)
-                newcrumble = CrumblingFloor(screenx, screeny, screen.scale * 0.7, cellName, floorColor)
+                newcrumble = CrumblingFloor(screenx, screeny, screen.scale, cellName, floorColor)
                 newcrumble.setColor(floorColor)
                 floors.append(newcrumble)
             elif cellContents == W:
@@ -1600,7 +1566,7 @@ def loadCavern(cavern, screen):
                 keys.append(Key(screenx, screeny, screen.scale, cellName))
             elif cellContents == Z or cellContents == Y:
                 cellName = "portal" + "-" + str(cellx) + "-" + str(celly)
-                portal.append(Portal(screenx, screeny, screen.scale * 0.7, cellName))
+                portal.append(Portal(screenx, screeny, screen.scale * 1.1, cellName))
                 if cellContents == Y:
                     # we also set the guardian end
                     lastGuardian = guardians[len(guardians)-1]
@@ -1628,24 +1594,23 @@ def main():
     # high score, lives height: 1.352
     
     events = Events()
-
+    game = ["centralCavern", "coldRoom", "theMenagerie"]
+    levelNumber = 0
     # load the specified cavern or the default, falling back to default if specified but not found
     defaultCavern = "centralCavern"
     userCavern = processCmdLineArgs(events)
     if userCavern not in caverns.keys():
         print("Cavern", userCavern, " is not known")
-        cavern = caverns[defaultCavern]
+        cavern = caverns[game[levelNumber]]
     else:
         print("Loading", userCavern)
         cavern = caverns[userCavern]
 
     screen = Screen(640, 320, cavern[1])
+    loadCavern(cavern, screen)
     player = Player()
     sound = Sound()
     scale = 0.7
-    game = ["centralCavern", "coldRoom", "theMenagerie"]
-    levelNumber = 0
-    loadCavern(caverns[game[levelNumber]], screen)
     clock = pygame.time.Clock()
     sound.startMainMusic()
 
